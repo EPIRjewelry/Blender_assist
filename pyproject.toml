@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "blender-assist"
+version = "0.1.0"
+description = "EPIR jewelry — MCP server (FastMCP) + Blender 5.1+ TCP bridge add-on for CAD / packshot workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "fastmcp>=3.2.0,<3.3",
+    "pydantic>=2.0,<3",
+]
+
+[project.urls]
+Repository = "https://github.com/EPIRjewelry/Blender_assist"
+
+[project.scripts]
+blender-assist = "mcp_server.server:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.11.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["mcp_server"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["mcp_server", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"blender_addon/blender_mcp_bridge.py" = ["E402"]

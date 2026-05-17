@@ -1,0 +1,16 @@
+﻿.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cursor/
+dist/
+*.egg-info/
+
+# Local Blender / mesh assets (keep out of git)
+*.blend
+*.blend1
+*.stl
+Untitled*
