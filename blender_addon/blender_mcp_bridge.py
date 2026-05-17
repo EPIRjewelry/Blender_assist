@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Blender MCP Bridge",
     "author": "blender-mcp",
-    "version": (0, 8, 5),
+    "version": (0, 8, 6),
     "blender": (5, 1, 0),
     "location": "3D View > Sidebar > Blender MCP",
     "description": "Localhost socket bridge for MCP -> Blender commands",
@@ -564,6 +564,24 @@ def _build_procedural_jewelry_material(payload: dict) -> dict:
     if absorption_density < 0.0:
         return {"ok": False, "error": {"code": "INVALID_INPUT", "message": "absorption_density must be >= 0"}}
 
+    normal_map_path = payload.get("normal_map_path")
+    roughness_map_path = payload.get("roughness_map_path")
+    use_edge_wear = bool(payload.get("use_edge_wear", False))
+    for _pkey, _pval in (
+        ("normal_map_path", normal_map_path),
+        ("roughness_map_path", roughness_map_path),
+    ):
+        if isinstance(_pval, str) and _pval.strip():
+            _pt = _pval.strip()
+            if not os.path.isfile(_pt):
+                return {
+                    "ok": False,
+                    "error": {
+                        "code": "INVALID_INPUT",
+                        "message": f"{_pkey} is not an existing file: {_pt!r}",
+                    },
+                }
+
     mat = bpy.data.materials.get(material_name)
     if mat is None:
         mat = bpy.data.materials.new(name=material_name)
@@ -609,11 +627,98 @@ def _build_procedural_jewelry_material(payload: dict) -> dict:
     _require_input_socket(vol, "Color").default_value = absorption_color_rgba
     _require_input_socket(vol, "Density").default_value = absorption_density
 
+    nm_tex_node = None
+    nm_map_node = None
+    if isinstance(normal_map_path, str) and normal_map_path.strip():
+        np_ = normal_map_path.strip()
+        img_n = bpy.data.images.load(np_, check_existing=True)
+        img_n.colorspace_settings.name = "Non-Color"
+        nm_tex_node = nodes.new(type="ShaderNodeTexImage")
+        nm_tex_node.location = (-900, 180)
+        nm_tex_node.image = img_n
+        nm_map_node = nodes.new(type="ShaderNodeNormalMap")
+        nm_map_node.location = (-680, 180)
+        links.new(nm_tex_node.outputs["Color"], nm_map_node.inputs["Color"])
+
+    rough_img_node = None
+    rough_rgb2bw = None
+    if isinstance(roughness_map_path, str) and roughness_map_path.strip():
+        rp_ = roughness_map_path.strip()
+        img_r = bpy.data.images.load(rp_, check_existing=True)
+        img_r.colorspace_settings.name = "Non-Color"
+        rough_img_node = nodes.new(type="ShaderNodeTexImage")
+        rough_img_node.location = (-900, -40)
+        rough_img_node.image = img_r
+        rough_rgb2bw = nodes.new(type="ShaderNodeRGBToBW")
+        rough_rgb2bw.location = (-680, -40)
+        links.new(rough_img_node.outputs["Color"], rough_rgb2bw.inputs["Color"])
+
+    wear_ramp = None
+    wear_rgb2bw = None
+    geom_wear = None
+    if use_edge_wear:
+        geom_wear = nodes.new(type="ShaderNodeNewGeometry")
+        geom_wear.location = (-1120, -260)
+        wear_ramp = nodes.new(type="ShaderNodeValToRGB")
+        wear_ramp.location = (-900, -260)
+        cr_w = wear_ramp.color_ramp
+        cr_w.elements[0].position = 0.35
+        cr_w.elements[0].color = (0.0, 0.0, 0.0, 1.0)
+        cr_w.elements[1].position = 0.65
+        cr_w.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+        links.new(geom_wear.outputs["Pointiness"], wear_ramp.inputs["Fac"])
+        wear_rgb2bw = nodes.new(type="ShaderNodeRGBToBW")
+        wear_rgb2bw.location = (-700, -260)
+        links.new(wear_ramp.outputs["Color"], wear_rgb2bw.inputs["Color"])
+
     try:
+        if nm_map_node is not None:
+            links.new(nm_map_node.outputs["Normal"], _require_input_socket(bump, "Normal"))
         links.new(_require_output_socket(noise, "Fac"), _require_input_socket(bump, "Height"))
         links.new(_require_output_socket(bump, "Normal"), _require_input_socket(bsdf, "Normal"))
         links.new(_require_output_socket(bsdf, "BSDF"), _require_input_socket(out, "Surface"))
         links.new(_require_output_socket(vol, "Volume"), _require_input_socket(out, "Volume"))
+
+        rough_sock = _require_input_socket(bsdf, "Roughness")
+        if rough_rgb2bw is not None and wear_rgb2bw is not None:
+            m_wear_scale = nodes.new(type="ShaderNodeMath")
+            m_wear_scale.operation = "MULTIPLY"
+            m_wear_scale.location = (-420, -200)
+            m_wear_scale.inputs[1].default_value = 0.22
+            links.new(wear_rgb2bw.outputs["Val"], m_wear_scale.inputs[0])
+            m_add = nodes.new(type="ShaderNodeMath")
+            m_add.operation = "ADD"
+            m_add.location = (-220, -100)
+            links.new(rough_rgb2bw.outputs["Val"], m_add.inputs[0])
+            links.new(m_wear_scale.outputs["Value"], m_add.inputs[1])
+            m_cap = nodes.new(type="ShaderNodeMath")
+            m_cap.operation = "MINIMUM"
+            m_cap.location = (-40, -100)
+            m_cap.inputs[1].default_value = 1.0
+            links.new(m_add.outputs["Value"], m_cap.inputs[0])
+            links.new(m_cap.outputs["Value"], rough_sock)
+        elif rough_rgb2bw is not None:
+            links.new(rough_rgb2bw.outputs["Val"], rough_sock)
+        elif wear_rgb2bw is not None:
+            val_r = nodes.new(type="ShaderNodeValue")
+            val_r.location = (-420, -120)
+            val_r.outputs[0].default_value = roughness
+            m_wear_scale2 = nodes.new(type="ShaderNodeMath")
+            m_wear_scale2.operation = "MULTIPLY"
+            m_wear_scale2.location = (-420, -260)
+            m_wear_scale2.inputs[1].default_value = 0.35
+            links.new(wear_rgb2bw.outputs["Val"], m_wear_scale2.inputs[0])
+            m_add2 = nodes.new(type="ShaderNodeMath")
+            m_add2.operation = "ADD"
+            m_add2.location = (-220, -120)
+            links.new(val_r.outputs[0], m_add2.inputs[0])
+            links.new(m_wear_scale2.outputs["Value"], m_add2.inputs[1])
+            m_cap2 = nodes.new(type="ShaderNodeMath")
+            m_cap2.operation = "MINIMUM"
+            m_cap2.location = (-40, -120)
+            m_cap2.inputs[1].default_value = 1.0
+            links.new(m_add2.outputs["Value"], m_cap2.inputs[0])
+            links.new(m_cap2.outputs["Value"], rough_sock)
     except ValueError as exc:
         return {"ok": False, "error": {"code": "INVALID_TARGET", "message": str(exc)}}
 
@@ -630,6 +735,9 @@ def _build_procedural_jewelry_material(payload: dict) -> dict:
             "object_name": object_name,
             "material_name": material_name,
             "render_engine": "CYCLES",
+            "normal_map_applied": bool(nm_map_node is not None),
+            "roughness_map_applied": bool(rough_rgb2bw is not None),
+            "use_edge_wear": use_edge_wear,
         },
     }
 
@@ -1904,6 +2012,10 @@ def _execute_bridge_request(data: str) -> dict:
         texture_type = str(payload.get("texture_type", "CLOUDS")).upper()
         texture_name = str(payload.get("texture_name", "MCP_DisplaceTex"))
         modifier_name = str(payload.get("modifier_name", "Displace"))
+        image_path_raw = payload.get("image_path")
+        use_image_tex = isinstance(image_path_raw, str) and bool(image_path_raw.strip())
+        image_path = image_path_raw.strip() if use_image_tex else ""
+
         obj = bpy.data.objects.get(object_name)
         if obj is None:
             return {
@@ -1911,24 +2023,61 @@ def _execute_bridge_request(data: str) -> dict:
                 "request_id": request_id,
                 "error": {"code": "OBJECT_NOT_FOUND", "message": f"Object not found: {object_name}"},
             }
-        supported_types = {"CLOUDS", "DISTORTED_NOISE", "MAGIC", "MARBLE", "NOISE", "STUCCI", "VORONOI", "WOOD"}
-        if texture_type not in supported_types:
-            return {
-                "ok": False,
-                "request_id": request_id,
-                "error": {
-                    "code": "INVALID_INPUT",
-                    "message": f"Unsupported texture_type: {texture_type}",
-                },
-            }
-        tex = bpy.data.textures.get(texture_name)
-        if tex is None:
-            tex = bpy.data.textures.new(texture_name, type=texture_type)
+
+        if use_image_tex:
+            if not os.path.isfile(image_path):
+                return {
+                    "ok": False,
+                    "request_id": request_id,
+                    "error": {
+                        "code": "INVALID_INPUT",
+                        "message": f"image_path is not an existing file: {image_path!r}",
+                    },
+                }
         else:
-            tex.type = texture_type
-        mod = obj.modifiers.new(name=modifier_name, type="DISPLACE")
+            supported_types = {"CLOUDS", "DISTORTED_NOISE", "MAGIC", "MARBLE", "NOISE", "STUCCI", "VORONOI", "WOOD"}
+            if texture_type not in supported_types:
+                return {
+                    "ok": False,
+                    "request_id": request_id,
+                    "error": {
+                        "code": "INVALID_INPUT",
+                        "message": f"Unsupported texture_type: {texture_type}",
+                    },
+                }
+
+        existing_mod = obj.modifiers.get(modifier_name)
+        if existing_mod is not None:
+            if existing_mod.type != "DISPLACE":
+                return {
+                    "ok": False,
+                    "request_id": request_id,
+                    "error": {
+                        "code": "INVALID_INPUT",
+                        "message": f"Modifier name already in use with non-DISPLACE type: {modifier_name!r}",
+                    },
+                }
+            mod = existing_mod
+        else:
+            mod = obj.modifiers.new(name=modifier_name, type="DISPLACE")
+
+        tex = bpy.data.textures.get(texture_name)
+        if use_image_tex:
+            if tex is None:
+                tex = bpy.data.textures.new(texture_name, type="IMAGE")
+            else:
+                tex.type = "IMAGE"
+            img = bpy.data.images.load(image_path, check_existing=True)
+            tex.image = img
+            mod.texture_coords = "UV"
+        else:
+            if tex is None:
+                tex = bpy.data.textures.new(texture_name, type=texture_type)
+            else:
+                tex.type = texture_type
+            mod.texture_coords = "LOCAL"
+
         mod.texture = tex
-        mod.texture_coords = "LOCAL"
         mod.direction = "NORMAL"
         mod.strength = strength
         mod.mid_level = mid_level
@@ -1939,7 +2088,14 @@ def _execute_bridge_request(data: str) -> dict:
             if vg_name:
                 mod.vertex_group = vg_name
                 vg_applied = vg_name
-        res = {"modifier_name": mod.name, "type": "DISPLACE", "texture": tex.name}
+        res = {
+            "modifier_name": mod.name,
+            "type": "DISPLACE",
+            "texture": tex.name,
+            "texture_coords": mod.texture_coords,
+        }
+        if use_image_tex:
+            res["image_path"] = image_path
         if vg_applied is not None:
             res["vertex_group"] = vg_applied
         return {
@@ -1947,6 +2103,65 @@ def _execute_bridge_request(data: str) -> dict:
             "request_id": request_id,
             "result": res,
         }
+
+    if action == "mesh_uv_unwrap_cylinder":
+        object_name = payload.get("object_name")
+        if not object_name or not isinstance(object_name, str):
+            return {
+                "ok": False,
+                "request_id": request_id,
+                "error": {"code": "INVALID_INPUT", "message": "payload.object_name (str) is required"},
+            }
+        obj = bpy.data.objects.get(object_name)
+        if obj is None:
+            return {
+                "ok": False,
+                "request_id": request_id,
+                "error": {"code": "OBJECT_NOT_FOUND", "message": f"Object not found: {object_name}"},
+            }
+        if obj.type != "MESH":
+            return {
+                "ok": False,
+                "request_id": request_id,
+                "error": {"code": "OBJECT_NOT_MESH", "message": f"Object is not MESH: {object_name}"},
+            }
+
+        prior_mode = bpy.context.mode
+
+        def _mode_set_from_context_mode(cm: str) -> None:
+            if cm == "OBJECT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+            elif cm in {"EDIT_MESH", "EDIT_CURVE", "EDIT_SURFACE", "EDIT_ARMATURE", "EDIT_METABALL", "EDIT_LATTICE"}:
+                bpy.ops.object.mode_set(mode="EDIT")
+            else:
+                try:
+                    bpy.ops.object.mode_set(mode=cm)
+                except Exception:
+                    bpy.ops.object.mode_set(mode="OBJECT")
+
+        try:
+            if prior_mode != "OBJECT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+            for ob in bpy.data.objects:
+                ob.select_set(False)
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode="EDIT")
+            bpy.ops.mesh.select_all(action="SELECT")
+            bpy.ops.uv.cylinder_project(direction="Z", align="Y", radius=1.0)
+        except Exception as exc:
+            return {
+                "ok": False,
+                "request_id": request_id,
+                "error": {"code": "OPERATOR_FAILED", "message": str(exc)},
+            }
+        finally:
+            try:
+                _mode_set_from_context_mode(prior_mode)
+            except Exception:
+                pass
+
+        return {"ok": True, "request_id": request_id, "result": {}}
 
     if action == "modifier_add_boolean_manifold":
         object_name = payload.get("object_name")

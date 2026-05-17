@@ -36,16 +36,18 @@ RingBandProfile = Literal["flat", "comfort"]
 mcp = FastMCP(
     "Blender MCP",
     instructions=(
-        "Jewelry/CAD-oriented MCP for Blender 5.1+: bridge tools, curve inspection/conversion to mesh, modifiers, "
+        "Jewelry/CAD-oriented MCP for Blender 5.1+: bridge tools, curve inspection/conversion to mesh, modifiers "
+        "(modifier_add_displace supports optional image_path for UV-mapped displacement textures), "
         "mesh metrics, jewelry mass from density (Depsgraph), STL export, generate_parametric_solid (CAD solids from "
         "prompted dimensions), apply_material_preset (Principled presets plus procedural Amethyst / Water_Ripple / "
         "Bark_Procedural / Diamond_Dispersion for Cycles packshot), build_procedural_jewelry_material (direct API node graph for AI-driven "
-        "shading), "
+        "shading; optional normal_map_path / roughness_map_path as Non-Color textures, optional use_edge_wear from Pointiness), "
         "render_still (write_still; optional film_transparent / samples for Cycles or Eevee), render_packshot (shop → lights → optional HDRI → camera frame → render), "
         "shop_ensure_scene (metric mm units, render resolution, "
         "Shop_Product/Shop_Studio collections), studio_apply_lights (idempotent 3× AREA key/fill/rim in studio collection), "
         "world_set_hdri (local .hdr/.exr only — Environment → Background world; rejects URLs), "
         "camera_frame_object (evaluated depsgraph bbox; perspective MCP_Packshot_Cam; sets scene.camera), "
+        "mesh_uv_unwrap_cylinder (cylinder_project UVs for CAD-like bands), "
         "generic bpy.ops via node_tool_invoke "
         "(Node Tools — same power as menus; can delete geometry or files). "
         "Destructive run_script is gated (env BLENDER_MCP_ALLOW_SCRIPT_EXEC + confirm=True + addon pref)."
@@ -363,11 +365,13 @@ def modifier_add_displace(
     texture_type: str = "CLOUDS",
     texture_name: str = "MCP_DisplaceTex",
     modifier_name: str = "Displace",
+    image_path: str | None = None,
+    vertex_group: str | None = None,
     host: str = "127.0.0.1",
     port: int = 8765,
     timeout_s: float = 5.0,
 ) -> dict:
-    """Add Displace modifier (with generated Blender texture)."""
+    """Add or update Displace modifier: procedural texture, or optional image_path (UV coords) with vertex_group mask."""
     payload = {
         "object_name": object_name,
         "strength": strength,
@@ -376,6 +380,10 @@ def modifier_add_displace(
         "texture_name": texture_name,
         "modifier_name": modifier_name,
     }
+    if image_path is not None:
+        payload["image_path"] = image_path
+    if vertex_group is not None:
+        payload["vertex_group"] = vertex_group
     out = _bridge_tool_call("modifier_add_displace", payload, host=host, port=port, timeout_s=timeout_s)
     if out["ok"]:
         out.pop("_bridge_result", None)
@@ -408,6 +416,27 @@ def modifier_add_boolean_manifold(
         out["logs"].append(
             f"modifier=boolean_manifold object={object_name} operand={operand_object} op={operation}"
         )
+    return out
+
+
+@mcp.tool(name="mesh_uv_unwrap_cylinder")
+def mesh_uv_unwrap_cylinder(
+    object_name: str,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    timeout_s: float = 30.0,
+) -> dict:
+    """UV unwrap mesh via cylinder projection (Z axis, Y align); restores prior interaction mode."""
+    out = _bridge_tool_call(
+        "mesh_uv_unwrap_cylinder",
+        {"object_name": object_name},
+        host=host,
+        port=port,
+        timeout_s=timeout_s,
+    )
+    if out["ok"]:
+        out.pop("_bridge_result", None)
+        out["logs"].append(f"uv=cylinder_project object={object_name}")
     return out
 
 
@@ -624,6 +653,9 @@ def build_procedural_jewelry_material(
     noise_distortion: float = 0.2,
     bump_strength: float = 0.2,
     bump_distance: float = 0.05,
+    normal_map_path: str | None = None,
+    roughness_map_path: str | None = None,
+    use_edge_wear: bool = False,
     host: str = "127.0.0.1",
     port: int = 8765,
     timeout_s: float = 30.0,
@@ -632,6 +664,8 @@ def build_procedural_jewelry_material(
     Build and assign a procedural jewelry material with direct Blender API only (no bpy.ops).
 
     Uses Principled BSDF + Noise->Bump for micro surface variation and Volume Absorption for gemstone-like depth.
+    Optional normal_map_path / roughness_map_path: local image files loaded as Non-Color; optional use_edge_wear
+    modulates Roughness from geometry Pointiness (high contrast ColorRamp).
     """
     payload = {
         "object_name": object_name,
@@ -649,7 +683,12 @@ def build_procedural_jewelry_material(
         "noise_distortion": noise_distortion,
         "bump_strength": bump_strength,
         "bump_distance": bump_distance,
+        "use_edge_wear": use_edge_wear,
     }
+    if normal_map_path is not None:
+        payload["normal_map_path"] = normal_map_path
+    if roughness_map_path is not None:
+        payload["roughness_map_path"] = roughness_map_path
     out = _bridge_tool_call(
         "build_procedural_jewelry_material", payload, host=host, port=port, timeout_s=timeout_s
     )

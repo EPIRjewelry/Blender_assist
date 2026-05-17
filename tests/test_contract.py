@@ -198,6 +198,8 @@ def test_modifier_add_displace_success(monkeypatch):
     def _fake_send_request(action, payload, config):
         assert action == "modifier_add_displace"
         assert payload["texture_type"] == "CLOUDS"
+        assert "image_path" not in payload
+        assert "vertex_group" not in payload
         return {
             "ok": True,
             "request_id": "x",
@@ -208,6 +210,21 @@ def test_modifier_add_displace_success(monkeypatch):
     out = modifier_add_displace("Ring_Base")
     assert out["ok"] is True
     assert any("modifier=displace" in s for s in out["logs"])
+    ToolResponse.model_validate(out)
+
+
+def test_modifier_add_displace_forwards_image_path_and_vertex_group(monkeypatch):
+    from mcp_server.server import modifier_add_displace
+
+    def _fake_send_request(action, payload, config):
+        assert action == "modifier_add_displace"
+        assert payload["image_path"] == "C:/maps/h.png"
+        assert payload["vertex_group"] == "Outer"
+        return {"ok": True, "request_id": "x", "result": {"modifier_name": "Displace", "type": "DISPLACE"}}
+
+    monkeypatch.setattr("mcp_server.server.send_request", _fake_send_request)
+    out = modifier_add_displace("Ring_Base", image_path="C:/maps/h.png", vertex_group="Outer")
+    assert out["ok"] is True
     ToolResponse.model_validate(out)
 
 
@@ -227,6 +244,21 @@ def test_modifier_add_boolean_manifold_success(monkeypatch):
     out = modifier_add_boolean_manifold("Ring_Base", "Cutter")
     assert out["ok"] is True
     assert any("modifier=boolean_manifold" in s for s in out["logs"])
+    ToolResponse.model_validate(out)
+
+
+def test_mesh_uv_unwrap_cylinder_success(monkeypatch):
+    from mcp_server.server import mesh_uv_unwrap_cylinder
+
+    def _fake_send_request(action, payload, config):
+        assert action == "mesh_uv_unwrap_cylinder"
+        assert payload["object_name"] == "Ring_Base"
+        return {"ok": True, "request_id": "x", "result": {}}
+
+    monkeypatch.setattr("mcp_server.server.send_request", _fake_send_request)
+    out = mesh_uv_unwrap_cylinder("Ring_Base")
+    assert out["ok"] is True
+    assert any("uv=cylinder_project" in s for s in out["logs"])
     ToolResponse.model_validate(out)
 
 
@@ -1087,6 +1119,9 @@ def test_build_procedural_jewelry_material_success(monkeypatch):
         assert action == "build_procedural_jewelry_material"
         assert payload["object_name"] == "Ring_A"
         assert payload["material_name"] == "MAT_Custom"
+        assert payload["use_edge_wear"] is False
+        assert "normal_map_path" not in payload
+        assert "roughness_map_path" not in payload
         return {
             "ok": True,
             "request_id": "x",
@@ -1102,6 +1137,39 @@ def test_build_procedural_jewelry_material_success(monkeypatch):
     assert out["ok"] is True
     assert out["metrics"]["materials"] == ["MAT_Custom"]
     assert any("direct_api_only=true" in line for line in out["logs"])
+    ToolResponse.model_validate(out)
+
+
+def test_build_procedural_jewelry_material_forwards_maps_and_wear(monkeypatch):
+    from mcp_server.server import build_procedural_jewelry_material
+
+    def _fake_send_request(action, payload, config):
+        assert action == "build_procedural_jewelry_material"
+        assert payload["normal_map_path"] == "C:/t/n.png"
+        assert payload["roughness_map_path"] == "C:/t/r.png"
+        assert payload["use_edge_wear"] is True
+        return {
+            "ok": True,
+            "request_id": "x",
+            "result": {
+                "object_name": "Ring_A",
+                "material_name": "MAT_Custom",
+                "render_engine": "CYCLES",
+                "normal_map_applied": True,
+                "roughness_map_applied": True,
+                "use_edge_wear": True,
+            },
+        }
+
+    monkeypatch.setattr("mcp_server.server.send_request", _fake_send_request)
+    out = build_procedural_jewelry_material(
+        "Ring_A",
+        material_name="MAT_Custom",
+        normal_map_path="C:/t/n.png",
+        roughness_map_path="C:/t/r.png",
+        use_edge_wear=True,
+    )
+    assert out["ok"] is True
     ToolResponse.model_validate(out)
 
 
