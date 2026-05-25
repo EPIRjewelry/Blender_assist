@@ -5,8 +5,21 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.cursor/
+# Cursor: commit .cursor/rules and agents; ignore local-only state
+.cursor/*
+!.cursor/mcp.json
+!.cursor/rules/
+!.cursor/agents/
+
 dist/
+agent/node_modules/
+agent/dist/
+agent/output/
+agent/.state/
+.blender_assist_state.json
+agent/.env
+cloudflare/node_modules/
+cloudflare/.wrangler/
 *.egg-info/
 
 # Local Blender / mesh assets (keep out of git)

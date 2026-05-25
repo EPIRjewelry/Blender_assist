@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "blender-mcp": {
+      "command": "python",
+      "args": ["-m", "mcp_server"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "BLENDER_MCP_ALLOW_SCRIPT_EXEC": "0"
+      }
+    }
+  }
+}

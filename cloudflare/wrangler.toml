@@ -1,0 +1,14 @@
+name = "blender-assist-gateway"
+main = "src/worker.ts"
+compatibility_date = "2024-08-01"
+
+[[kv_namespaces]]
+binding = "JOB_FLAGS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[[r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "blender-assist-artifacts"
+
+[vars]
+# Set TRIGGER_HMAC_SECRET via wrangler secret

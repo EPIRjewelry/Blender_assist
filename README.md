@@ -243,3 +243,20 @@ Add a server entry pointing at this package’s module (adjust path):
 ```
 
 Use your actual project directory for `cwd`.
+
+## TypeScript agent (`agent/`)
+
+Autonomous packshot pipeline with local MCP verify, auditor PASS gate, human approval (Google / Cloudflare gateway), and `agent:resume` for STL export.
+
+See **[agent/README.md](agent/README.md)** for setup (`npm install`, `.env`, commands).
+
+Quick start (Blender bridge running):
+
+```bash
+cd agent && npm install
+npm run agent -- execute YourObjectName
+# after human approval:
+npm run agent:resume
+```
+
+Project rules and multi-agent definitions: `.cursor/rules/`, `.cursor/agents/`.

@@ -262,6 +262,35 @@ def test_mesh_uv_unwrap_cylinder_success(monkeypatch):
     ToolResponse.model_validate(out)
 
 
+def test_curve_cutter_create_success(monkeypatch):
+    from mcp_server.server import curve_cutter_create
+
+    def _fake_send_request(action, payload, config):
+        assert action == "curve_cutter_create"
+        assert payload["object_name"] == "Cutter_Ichthys"
+        assert payload["symbol"] == "ICHTHYS"
+        assert payload["height_mm"] == 8.0
+        assert payload["extrude_mm"] == 1.0
+        assert payload["origin"] == [1.0, 2.0, 0.5]
+        return {
+            "ok": True,
+            "request_id": "x",
+            "result": {"object_name": "Cutter_Ichthys", "bezier_points": 7},
+        }
+
+    monkeypatch.setattr("mcp_server.server.send_request", _fake_send_request)
+    out = curve_cutter_create(
+        "Cutter_Ichthys",
+        symbol="ICHTHYS",
+        height_mm=8.0,
+        extrude_mm=1.0,
+        origin=[1.0, 2.0, 0.5],
+    )
+    assert out["ok"] is True
+    assert any("curve_cutter" in s for s in out["logs"])
+    ToolResponse.model_validate(out)
+
+
 def test_mesh_get_bbox_mm_success(monkeypatch):
     from mcp_server.server import mesh_get_bbox_mm
 

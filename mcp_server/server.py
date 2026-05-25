@@ -9,7 +9,7 @@ from typing import Literal
 
 from fastmcp import FastMCP
 
-from mcp_server import script_policy
+from mcp_server import job_context, script_policy
 from mcp_server.bridge import (
     BridgeConfig,
     BridgeConnectionError,
@@ -32,6 +32,7 @@ MaterialPresetName = Literal[
 
 ParametricSolidType = Literal["ring_band"]
 RingBandProfile = Literal["flat", "comfort"]
+CurveCutterSymbol = Literal["ICHTHYS"]
 
 mcp = FastMCP(
     "Blender MCP",
@@ -48,6 +49,7 @@ mcp = FastMCP(
         "world_set_hdri (local .hdr/.exr only — Environment → Background world; rejects URLs), "
         "camera_frame_object (evaluated depsgraph bbox; perspective MCP_Packshot_Cam; sets scene.camera), "
         "mesh_uv_unwrap_cylinder (cylinder_project UVs for CAD-like bands), "
+        "curve_cutter_create (Bezier curve + extrude volume for Boolean cutters, e.g. ICHTHYS; bpy.data.curves RNA only), "
         "generic bpy.ops via node_tool_invoke "
         "(Node Tools — same power as menus; can delete geometry or files). "
         "Destructive run_script is gated (env BLENDER_MCP_ALLOW_SCRIPT_EXEC + confirm=True + addon pref)."
@@ -636,6 +638,38 @@ def generate_parametric_solid(
     return out
 
 
+@mcp.tool(name="curve_cutter_create")
+def curve_cutter_create(
+    object_name: str,
+    symbol: CurveCutterSymbol = "ICHTHYS",
+    height_mm: float = 10.0,
+    extrude_mm: float = 1.0,
+    origin: list[float] | None = None,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    timeout_s: float = 30.0,
+) -> dict:
+    """
+    Create a 3D Bezier curve object with solid extrusion (cutter-ready volume) via bpy.data.curves RNA only.
+
+    Default extrude_mm=1.0 gives ~1 mm wall in CAD scenes (1 BU = 1 mm). Use with modifier_add_boolean_manifold after
+    object_convert_to_mesh if a mesh operand is required. Symbol ICHTHYS: stylized fish outline in XY plane.
+    """
+    payload: dict = {
+        "object_name": object_name,
+        "symbol": symbol,
+        "height_mm": height_mm,
+        "extrude_mm": extrude_mm,
+    }
+    if origin is not None:
+        payload["origin"] = origin
+    out = _bridge_tool_call("curve_cutter_create", payload, host=host, port=port, timeout_s=timeout_s)
+    if out["ok"]:
+        out.pop("_bridge_result", None)
+        out["logs"].append(f"curve_cutter symbol={symbol} height_mm={height_mm} extrude_mm={extrude_mm}")
+    return out
+
+
 @mcp.tool(name="build_procedural_jewelry_material")
 def build_procedural_jewelry_material(
     object_name: str,
@@ -1020,7 +1054,12 @@ def casting_scale_isotropic(
 def _bridge_tool_call(action: str, payload: dict, host: str, port: int, timeout_s: float) -> dict:
     t0 = time.perf_counter()
     warnings: list[str] = []
-    logs: list[str] = []
+    job_id = payload.get("job_id")
+    if job_id:
+        import os
+
+        os.environ["BLENDER_ASSIST_JOB_ID"] = str(job_id)
+    logs = job_context.prefix_logs([], [f"action={action}"])
 
     if timeout_s < 0.5 or timeout_s > 120:
         return ToolResponse(

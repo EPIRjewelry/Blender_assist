@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Blender MCP Bridge",
     "author": "blender-mcp",
-    "version": (0, 8, 6),
+    "version": (0, 8, 7),
     "blender": (5, 1, 0),
     "location": "3D View > Sidebar > Blender MCP",
     "description": "Localhost socket bridge for MCP -> Blender commands",
@@ -16,6 +16,8 @@ import queue
 import re
 import socket
 import threading
+import importlib.util
+from pathlib import Path
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import UTC, datetime
 
@@ -1827,6 +1829,183 @@ def _bridge_timer_unregister():
         _timer_registered = False
 
 
+_curve_cutter_mod_cache: object | None = None
+_curve_cutter_mod_tried = False
+
+
+def _load_spatial_curve_cutter_module():
+    """Load repo ``tools/spatial_curve_cutter.py`` when the add-on lives under a full clone."""
+    global _curve_cutter_mod_cache, _curve_cutter_mod_tried
+    if _curve_cutter_mod_tried:
+        return _curve_cutter_mod_cache
+    _curve_cutter_mod_tried = True
+    bridge_path = Path(__file__).resolve()
+    search_roots: list[Path] = []
+    if bridge_path.parent.name == "blender_addon":
+        search_roots.append(bridge_path.parent.parent)
+    search_roots.extend(list(bridge_path.parents)[:8])
+    seen: set[Path] = set()
+    for root in search_roots:
+        if root in seen:
+            continue
+        seen.add(root)
+        modpath = root / "tools" / "spatial_curve_cutter.py"
+        if not modpath.is_file():
+            continue
+        try:
+            spec = importlib.util.spec_from_file_location("mcp_spatial_curve_cutter", modpath)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            _curve_cutter_mod_cache = module
+            return module
+        except Exception:
+            continue
+    _curve_cutter_mod_cache = None
+    return None
+
+
+def _embedded_ichthys_bezier_frames_mm(height_mm: float) -> list[dict]:
+    """Same geometry as ``tools/spatial_curve_cutter.py`` when that file is not on disk."""
+    if height_mm <= 0:
+        raise ValueError("height_mm must be > 0")
+    h = float(height_mm)
+    w = h * 1.22
+    poly = [
+        (-0.52 * w, 0.0, 0.0),
+        (-0.28 * w, -0.44 * h, 0.0),
+        (0.05 * w, -0.52 * h, 0.0),
+        (0.50 * w, -0.02 * h, 0.0),
+        (0.52 * w, 0.08 * h, 0.0),
+        (0.05 * w, 0.52 * h, 0.0),
+        (-0.28 * w, 0.44 * h, 0.0),
+    ]
+
+    def v_add(a, b):
+        return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+    def v_sub(a, b):
+        return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+    def v_scale(a, s):
+        return (a[0] * s, a[1] * s, a[2] * s)
+
+    def v_len(a):
+        return math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
+
+    n = len(poly)
+    tension = 0.32
+    out: list[dict] = []
+    for i in range(n):
+        p_prev = poly[(i - 1) % n]
+        p = poly[i]
+        p_next = poly[(i + 1) % n]
+        seg = v_sub(p_next, p_prev)
+        ln = v_len(seg)
+        if ln < 1e-12:
+            delta = (0.0, 0.0, 0.0)
+        else:
+            delta = v_scale(seg, tension * 0.5)
+        hl = v_sub(p, delta)
+        hr = v_add(p, delta)
+        out.append({"co": p, "handle_left": hl, "handle_right": hr})
+    return out
+
+
+def _bezier_frames_for_cutter_symbol(symbol: str, height_mm: float) -> list[dict]:
+    sym = symbol.strip().upper()
+    if sym != "ICHTHYS":
+        raise ValueError(f"Unsupported symbol: {symbol!r} (supported: ICHTHYS)")
+    mod = _load_spatial_curve_cutter_module()
+    if mod is not None:
+        return list(mod.ichthys_bezier_frames_mm(height_mm))
+    return _embedded_ichthys_bezier_frames_mm(height_mm)
+
+
+def _create_curve_cutter_object(payload: dict) -> dict:
+    object_name = payload.get("object_name")
+    symbol = str(payload.get("symbol", "ICHTHYS"))
+    try:
+        height_mm = float(payload.get("height_mm", 10.0))
+        extrude_mm = float(payload.get("extrude_mm", 1.0))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": {"code": "INVALID_INPUT", "message": "height_mm and extrude_mm must be numeric"}}
+    if not object_name or not isinstance(object_name, str):
+        return {"ok": False, "error": {"code": "INVALID_INPUT", "message": "payload.object_name (str) is required"}}
+    if height_mm <= 0 or extrude_mm <= 0:
+        return {"ok": False, "error": {"code": "INVALID_INPUT", "message": "height_mm and extrude_mm must be > 0"}}
+
+    origin = payload.get("origin")
+    ox, oy, oz = 0.0, 0.0, 0.0
+    if origin is not None:
+        if not isinstance(origin, (list, tuple)) or len(origin) != 3:
+            return {"ok": False, "error": {"code": "INVALID_INPUT", "message": "origin must be [x, y, z] with numeric entries"}}
+        try:
+            ox, oy, oz = float(origin[0]), float(origin[1]), float(origin[2])
+        except (TypeError, ValueError):
+            return {"ok": False, "error": {"code": "INVALID_INPUT", "message": "origin entries must be numeric"}}
+
+    try:
+        frames = _bezier_frames_for_cutter_symbol(symbol, height_mm)
+    except ValueError as exc:
+        return {"ok": False, "error": {"code": "INVALID_INPUT", "message": str(exc)}}
+
+    if bpy.context.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+    existing = bpy.data.objects.get(object_name)
+    if existing is not None:
+        bpy.data.objects.remove(existing, do_unlink=True)
+
+    curve_name = f"{object_name}_CurveData"
+    cu = bpy.data.curves.new(name=curve_name)
+    cu.dimensions = "3D"
+    cu.fill_mode = "FULL"
+    cu.extrude = extrude_mm
+
+    sp = cu.splines.new("BEZIER")
+    sp.use_cyclic_u = True
+    sp.resolution_u = 12
+    n = len(frames)
+    n_cur = len(sp.bezier_points)
+    if n > n_cur:
+        sp.bezier_points.add(n - n_cur)
+    elif n < n_cur:
+        while len(sp.bezier_points) > n:
+            sp.bezier_points.remove(sp.bezier_points[len(sp.bezier_points) - 1])
+
+    off = Vector((ox, oy, oz))
+    for i, bp in enumerate(sp.bezier_points):
+        fr = frames[i]
+        co = Vector(fr["co"]) + off
+        hl = Vector(fr["handle_left"]) + off
+        hr = Vector(fr["handle_right"]) + off
+        bp.co = co
+        bp.handle_left = hl
+        bp.handle_right = hr
+        bp.handle_left_type = "ALIGNED"
+        bp.handle_right_type = "ALIGNED"
+
+    obj = bpy.data.objects.new(object_name, cu)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+
+    return {
+        "ok": True,
+        "result": {
+            "object_name": obj.name,
+            "symbol": symbol.strip().upper(),
+            "height_mm": height_mm,
+            "extrude_mm": extrude_mm,
+            "bezier_points": n,
+            "fill_mode": cu.fill_mode,
+            "dimensions": cu.dimensions,
+        },
+    }
+
+
 def _execute_bridge_request(data: str) -> dict:
     try:
         req = json.loads(data)
@@ -2607,6 +2786,12 @@ def _execute_bridge_request(data: str) -> dict:
 
     if action == "generate_parametric_solid":
         out = _generate_parametric_solid(payload)
+        if not out["ok"]:
+            return {"ok": False, "request_id": request_id, "error": out["error"]}
+        return {"ok": True, "request_id": request_id, "result": out["result"]}
+
+    if action == "curve_cutter_create":
+        out = _create_curve_cutter_object(payload)
         if not out["ok"]:
             return {"ok": False, "request_id": request_id, "error": out["error"]}
         return {"ok": True, "request_id": request_id, "result": out["result"]}

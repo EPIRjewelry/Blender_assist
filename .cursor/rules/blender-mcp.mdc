@@ -1,0 +1,12 @@
+---
+description: Blender MCP bridge and jewelry CAD conventions for this repo
+globs:
+  - mcp_server/**
+  - blender_addon/**
+  - agent/**
+---
+
+- Prefer typed MCP tools over `run_script`; script exec requires env + confirm + addon pref.
+- Scene units: metric mm (`scale_length=0.001`, `length_unit=MILLIMETERS`) for manufacturing workflows.
+- Blender bridge: localhost TCP `127.0.0.1:8765`; all `bpy` on main thread via addon queue.
+- Propagate `BLENDER_ASSIST_JOB_ID` in logs when automating from `agent/`.

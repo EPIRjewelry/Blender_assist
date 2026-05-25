@@ -1,0 +1,27 @@
+{
+  "name": "blender-assist-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "agent": "tsx src/index.ts",
+    "agent:execute": "tsx src/index.ts execute",
+    "agent:resume": "tsx src/cli/resume.ts",
+    "agent:sync-google": "tsx src/cli/sync-google.ts",
+    "agent:audit": "tsx src/auditor/run-audit-cli.ts",
+    "agent:orchestrate": "tsx src/orchestrator/cloud-run.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@cursor/sdk": "^1.0.13",
+    "dotenv": "^16.4.7",
+    "googleapis": "^144.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

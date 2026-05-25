@@ -1,0 +1,10 @@
+---
+description: Blueprint-driven agent steps for packshot and CAD validation
+globs:
+  - agent/src/blueprints/**
+  - agent/src/loops/**
+---
+
+- Run local algorithmic checks (`mesh_get_bbox_mm`, `mesh_check_manifold`, `camera_frame_object`) before `render_packshot`.
+- No VLM / Workers AI on PNG in v1; human reviews via Drive link and approve gateway.
+- Resume interrupted jobs with `npm run agent:resume` from `agent/` after approval.
