@@ -4,7 +4,7 @@ compatibility_date = "2024-08-01"
 
 [[kv_namespaces]]
 binding = "JOB_FLAGS"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "0dc539f6381c488780c2016a32f2dfc4"
 
 [[r2_buckets]]
 binding = "ARTIFACTS"
