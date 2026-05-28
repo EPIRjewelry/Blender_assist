@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "blender-mcp": {
-      "command": "python",
+      "command": ".venv/Scripts/python.exe",
       "args": ["-m", "mcp_server"],
       "cwd": "${workspaceFolder}",
       "env": {

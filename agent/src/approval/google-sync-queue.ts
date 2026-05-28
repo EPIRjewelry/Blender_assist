@@ -1,12 +1,8 @@
-import { google, repoRoot } from "../config.js";
-import { globalStatePath } from "../config.js";
+import path from "node:path";
+import { google } from "../config.js";
 import { jobLog } from "../logging/correlation.js";
 import type { BlenderAssistState } from "./state-schema.js";
-import {
-  loadGoogleQueue,
-  saveGoogleQueue,
-  saveState,
-} from "./state-store.js";
+import { jobDir, saveState, updateGoogleQueue } from "./state-store.js";
 
 export async function enqueueGoogleSync(
   state: BlenderAssistState,
@@ -19,24 +15,25 @@ export async function enqueueGoogleSync(
   const now = Date.now();
   const driveAt = new Date(now + google.syncDelayMs).toISOString();
   const sheetsAt = new Date(now + google.sheetsDelayMs).toISOString();
-  const queue = await loadGoogleQueue();
+  const perJobStatePath = path.join(jobDir(state.jobId), "state.json");
 
-  queue.items.push(
-    {
-      jobId: state.jobId,
-      kind: "drive",
-      runAfter: driveAt,
-      statePath: globalStatePath(),
-    },
-    {
-      jobId: state.jobId,
-      kind: "sheets",
-      runAfter: sheetsAt,
-      statePath: globalStatePath(),
-    },
-  );
-
-  await saveGoogleQueue(queue);
+  await updateGoogleQueue((queue) => {
+    queue.items.push(
+      {
+        jobId: state.jobId,
+        kind: "drive",
+        runAfter: driveAt,
+        statePath: perJobStatePath,
+      },
+      {
+        jobId: state.jobId,
+        kind: "sheets",
+        runAfter: sheetsAt,
+        statePath: perJobStatePath,
+      },
+    );
+    return queue;
+  });
 
   const next: BlenderAssistState = {
     ...state,

@@ -20,6 +20,10 @@ export const BlenderAssistStateSchema = z.object({
   humanApproval: z.boolean().optional(),
   humanApprovalSource: z.enum(["sheets", "webhook", "cli"]).optional(),
   triggerToken: z.string().optional(),
+  /** Cursor SDK session — used by agent:resume to reattach via Agent.getRun */
+  cursorAgentId: z.string().optional(),
+  cursorRunId: z.string().optional(),
+  cursorRuntime: z.enum(["local", "cloud"]).optional(),
   objectName: z.string(),
   host: z.string(),
   port: z.number().int(),

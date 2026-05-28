@@ -1,0 +1,50 @@
+# Blender Assist — reduce semantic noise for Cursor indexing/search
+# Aligns with .gitignore where safe; keeps all project source (.py, .ts, configs, tests, docs)
+
+# --- Python virtualenv & bytecode (largest noise: ~9k files in .venv) ---
+.venv/
+venv/
+**/__pycache__/
+*.py[cod]
+*.pyd
+
+# --- Python tool caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# --- Node dependencies & lockfiles (low refactor value, huge JSON) ---
+**/node_modules/
+**/package-lock.json
+
+# --- Build / deploy artifacts ---
+dist/
+agent/dist/
+cloudflare/.wrangler/
+
+# --- Runtime output & local state ---
+agent/output/
+agent/.state/
+.blender_assist_state.json
+agent/.env
+
+# --- VCS metadata (not application source) ---
+.git/
+
+# --- Blender mesh / scene binaries (local assets, not code) ---
+renders/
+*.blend
+*.blend1
+*.stl
+Untitled*
+
+# --- Scratch / temp scripts (duplicates or one-off experiments) ---
+_temp_boolean.py
+mcp_server/_temp_boolean.py
+
+# --- Logs & temp ---
+*.log
+*.tmp
+*.temp
+*~

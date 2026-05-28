@@ -1,6 +1,7 @@
 import { cursorSdk } from "../config.js";
 import { buildMcpServers, localAgentOptions } from "../mcp-config.js";
-import { loadState } from "../approval/state-store.js";
+import { withCursorSession } from "../approval/cursor-session.js";
+import { loadState, saveState } from "../approval/state-store.js";
 import { jobLog } from "../logging/correlation.js";
 
 async function runCloudOrchestrator(prompt: string): Promise<void> {
@@ -30,6 +31,18 @@ async function runCloudOrchestrator(prompt: string): Promise<void> {
 
   jobLog(`Cloud orchestrator agentId=${agent.agentId}`);
   const run = await agent.send(prompt);
+  jobLog(`Cloud orchestrator runId=${run.id}`);
+
+  const stateBeforeRun = await loadState();
+  if (stateBeforeRun) {
+    await saveState(
+      withCursorSession(stateBeforeRun, {
+        agentId: agent.agentId,
+        runId: run.id,
+        runtime: "cloud",
+      }),
+    );
+  }
 
   for await (const event of run.stream()) {
     if (event.type === "assistant") {

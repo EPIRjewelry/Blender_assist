@@ -1,17 +1,28 @@
 import { bridge } from "../config.js";
+import { attachCursorRun } from "../approval/cursor-session.js";
 import { loadState, saveState } from "../approval/state-store.js";
 import { readStatusByJobId } from "../approval/google-sheets.js";
 import { jobLog, setJobId } from "../logging/correlation.js";
 import { sendBridgeRequest } from "../mcp/bridge-client.js";
 import { checkGatewayApproval } from "../approval/trigger-gateway.js";
 
-export async function resumeJob(): Promise<void> {
-  const state = await loadState();
+export async function resumeJob(jobIdArg?: string): Promise<void> {
+  const state = await loadState(jobIdArg);
   if (!state) {
-    console.error("No .blender_assist_state.json — run agent:execute first.");
+    console.error(
+      "No job state — run agent:execute first or pass job UUID: npm run agent:resume -- <jobId>",
+    );
     process.exit(1);
   }
   setJobId(state.jobId);
+
+  const cursorAttach = await attachCursorRun(state);
+  if (!cursorAttach.ok) {
+    console.error(
+      `Cursor run ${state.cursorRunId} ended with error — fix or clear cursorRunId before STL export.`,
+    );
+    process.exit(5);
+  }
 
   if (state.auditorVerdict !== "PASS") {
     console.error(`Auditor verdict is ${state.auditorVerdict ?? "missing"} — need PASS.`);
@@ -91,7 +102,8 @@ export async function resumeJob(): Promise<void> {
   jobLog(`STL export done: ${stlPath}`);
 }
 
-resumeJob().catch((err) => {
+const jobIdFromCli = process.argv[2];
+resumeJob(jobIdFromCli).catch((err) => {
   console.error(err);
   process.exit(1);
 });

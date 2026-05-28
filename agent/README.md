@@ -22,7 +22,7 @@ npm install
 | Script | Description |
 |--------|-------------|
 | `npm run agent -- execute <ObjectName>` | Verify → render packshot → audit → save state → exit (await human) |
-| `npm run agent:resume` | After auditor PASS + human approval → `export_stl` |
+| `npm run agent:resume -- <jobId>` | After auditor PASS + human approval → reattach Cursor run (if IDs in state) → `export_stl` |
 | `npm run agent:sync-google` | Process paced Drive/Sheets queue (no tight polling) |
 | `npm run agent:audit` | Re-run auditor on current state |
 | `npm run agent:orchestrate` | Cloud Cursor agent (Agents Window, needs `CURSOR_API_KEY`) |
