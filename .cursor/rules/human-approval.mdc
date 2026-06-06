@@ -3,8 +3,5 @@ description: Human-in-the-loop approval before STL export and final packshot sig
 globs:
   - agent/**
 ---
-
-- Do not mark a packshot job complete without `humanApproval` in `.blender_assist_state.json` (webhook, Sheets, or CLI).
-- Do not export STL until `auditorVerdict === "PASS"` and human approval are both true.
-- PNG naming: `{blueprint}_{jobId}.png` (e.g. `packshot_v1_<uuid>.png`).
-- Avoid polling Google Sheets in a tight loop; use `agent:resume` or the Cloudflare approve gateway.
+- ⚠️ **SSOT — Zatwierdzanie:** Nie parsuj własnych założeń dotyczących Human Approval, bramek STL/packshot ani nazewnictwa artefaktów.
+- Wszystkie procedury zatwierdzania i wymogi audytowe czerp **WYŁĄCZNIE** z `/REVIEW.md` (§4 Human Approval, §3 Potoki Agentowe).

@@ -48,3 +48,8 @@ mcp_server/_temp_boolean.py
 *.tmp
 *.temp
 *~
+
+# --- Kilo Code Encapsulation ---
+.kilo/
+kilo.jsonc
+

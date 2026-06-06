@@ -27,3 +27,6 @@ cloudflare/.wrangler/
 *.blend1
 *.stl
 Untitled*
+
+# --- Cursor SSOT Index ---
+!.cursor/index.mdc

@@ -4,7 +4,5 @@ globs:
   - agent/src/blueprints/**
   - agent/src/loops/**
 ---
-
-- Run local algorithmic checks (`mesh_get_bbox_mm`, `mesh_check_manifold`, `camera_frame_object`) before `render_packshot`.
-- No VLM / Workers AI on PNG in v1; human reviews via Drive link and approve gateway.
-- Resume interrupted jobs with `npm run agent:resume` from `agent/` after approval.
+- ⚠️ **SSOT — Blueprinty:** Nie zakładaj własnych kroków weryfikacji, polityki VLM ani procedur resume.
+- Wszystkie reguły blueprintów agentów czerp **WYŁĄCZNIE** z `/REVIEW.md` (§5 Blueprinty agentów).

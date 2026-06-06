@@ -1,0 +1,20 @@
+{
+  "instructions": [
+    "REVIEW.md",
+    "SKILL.md"
+  ],
+  "mcp": {
+    "blender-mcp": {
+      "command": ".venv/Scripts/python.exe",
+      "args": ["-m", "mcp_server"],
+      "timeout": 30000
+    }
+  },
+  "permissions": {
+    "blender-mcp_jewelry_mass_report": "allow",
+    "blender-mcp_mesh_get_*": "allow",
+    "blender-mcp_object_get_info": "allow",
+    "blender-mcp_blender_ping": "allow",
+    "blender-mcp_scene_*": "allow"
+  }
+}

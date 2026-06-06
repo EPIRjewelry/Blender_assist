@@ -1,0 +1,16 @@
+---
+description: Nadrzędny indeks SSOT — mapowanie reguł Cursor na centralne pliki Markdown
+alwaysApply: true
+---
+
+# Blender Assist — Nadrzędny przewodnik orientacyjny (SSOT)
+
+Jesteś w trybie **Markdown-Centric SSOT**. Ta baza kodu wymaga restrykcyjnego przestrzegania wytycznych zewnętrznych, aby uniknąć redundancji kontekstowej.
+
+- **KRYTYCZNE (Zanim zmodyfikujesz kod):** Bezwzględnie zapoznaj się z treścią poniższych plików tekstowych z katalogu głównego:
+  - `/REVIEW.md` – Zasady Code Review, jednostki (metryczne mm), Human Approval (§4), blueprinty agentów (§5), bramki audytu (§3).
+  - `/SKILL.md` – Twarda wiedza domenowa o architekturze mostka (TCP localhost:8765), jednowątkowości `bpy` i obsłudze matrycy błędów `NON_MANIFOLD_MESH`.
+
+- **Reguły Cursor (cienkie wskaźniki):** Wszystkie pliki w `.cursor/rules/` (`blender-mcp`, `human-approval`, `agent-blueprints`) to warstwa routingu globów — **nie zawierają autonomicznej wiedzy**. Źródło prawdy: `/REVIEW.md` i `/SKILL.md`.
+
+- **Hermetyzacja Ekosystemów:** Całkowicie ignoruj jakiekolwiek pliki zlokalizowane w ścieżce `.kilo/`. Są one przeznaczone dla zewnętrznego analizatora.

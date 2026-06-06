@@ -1,12 +1,9 @@
 ---
-description: Blender MCP bridge and jewelry CAD conventions for this repo
+description: Wytyczne projektowe dla mostka Blender MCP i specyfikacji CAD
 globs:
   - mcp_server/**
   - blender_addon/**
   - agent/**
 ---
-
-- Prefer typed MCP tools over `run_script`; script exec requires env + confirm + addon pref.
-- Scene units: metric mm (`scale_length=0.001`, `length_unit=MILLIMETERS`) for manufacturing workflows.
-- Blender bridge: localhost TCP `127.0.0.1:8765`; all `bpy` on main thread via addon queue.
-- Propagate `BLENDER_ASSIST_JOB_ID` in logs when automating from `agent/`.
+- ⚠️ **SSOT:** Wszelkie reguły dotyczące jednostek (metryczne milimetry), specyfikacji mostka (TCP, port 8765), typowanych narzędzi i dozwolonego zachowania kodu czerp **WYŁĄCZNIE** z plików `/REVIEW.md` oraz `/SKILL.md` z katalogu głównego.
+- Nigdy nie parsuj ani nie zakładaj własnych parametrów technicznych i domenowych, poza tymi wyszczególnionymi w plikach SSOT.
