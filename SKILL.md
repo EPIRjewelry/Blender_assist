@@ -10,6 +10,7 @@ Zbiór twardych danych technicznych dotyczących środowiska Blender 5.1+, proto
 ## 2. Manipulacja Sceną i Renderowanie (Blender 5.1+)
 - **Render i Packshot:** Wykorzystujemy renderowanie `Cycles` dla realistycznego oddania transmisji i absorpcji objętościowej (kamienie szlachetne). Użycie materiałów proceduralnych AI odbywa się przez `build_procedural_jewelry_material`.
 - **Node Tools:** Operatory Node Tools rejestrują się poprzez identyfikatory w formacie `GeometryNodeTree.node_tool_idname`.
+- **Odkrywanie Narzędzi (Advertise-and-Activate):** Agent NIGDY nie zgaduje parametrów dla generycznych operatorów ani narzędzi Node Tools. Przed użyciem `node_tool_invoke` należy ZAWSZE wywołać `get_blender_operator_schema`, aby pozyskać poprawny JSON schemat i argumenty RNA z Blendera.
 
 ## 3. Matryca Błędów (Error Codes)
 Krytyczne statusy zwrotne mostka wymagające ścisłej obsługi błędów:

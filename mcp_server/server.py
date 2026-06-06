@@ -17,7 +17,7 @@ from mcp_server.bridge import (
     BridgeTimeoutError,
     send_request,
 )
-from mcp_server.models import JewelryMetrics, ToolResponse
+from mcp_server.models import JewelryMetrics, OperatorSchemaInput, ToolResponse
 
 MaterialPresetName = Literal[
     "14K_Gold",
@@ -51,7 +51,8 @@ mcp = FastMCP(
         "mesh_uv_unwrap_cylinder (cylinder_project UVs for CAD-like bands), "
         "curve_cutter_create (Bezier curve + extrude volume for Boolean cutters, e.g. ICHTHYS; bpy.data.curves RNA only), "
         "generic bpy.ops via node_tool_invoke "
-        "(Node Tools — same power as menus; can delete geometry or files). "
+        "(Node Tools — same power as menus; can delete geometry or files); "
+        "get_blender_operator_schema (RNA introspection for Advertise-and-Activate before node_tool_invoke). "
         "Destructive run_script is gated (env BLENDER_MCP_ALLOW_SCRIPT_EXEC + confirm=True + addon pref)."
     ),
 )
@@ -875,6 +876,39 @@ def render_packshot(
             for key in ("shop_ensure_scene", "studio_apply_lights", "world_set_hdri", "camera_frame_object", "render_still"):
                 if steps.get(key) is not None:
                     out["logs"].append(f"step_ok={key}")
+    return out
+
+
+@mcp.tool(name="get_blender_operator_schema")
+def get_blender_operator_schema(
+    operator_idname: str,
+    object_name: str | None = None,
+    mode: str | None = None,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    timeout_s: float = 10.0,
+) -> dict:
+    """
+    Introspect a bpy.ops operator RNA schema (Advertise-and-Activate).
+
+    Returns operator_idname, poll_ok, and properties (name, rna_type, description, default, is_enum, enum_items).
+    Call this before node_tool_invoke so the agent never guesses operator_properties.
+    Optional object_name/mode set Blender context before poll() — same as node_tool_invoke.
+    """
+    inp = OperatorSchemaInput(
+        operator_idname=operator_idname,
+        object_name=object_name,
+        mode=mode,
+    )
+    payload = inp.model_dump(exclude_none=True)
+    out = _bridge_tool_call("operator_get_schema", payload, host=host, port=port, timeout_s=timeout_s)
+    if out["ok"]:
+        result = out.pop("_bridge_result", {})
+        out["result"] = result
+        out["logs"].append(f"operator_idname={result.get('operator_idname')}")
+        out["logs"].append(f"poll_ok={result.get('poll_ok')}")
+        props = result.get("properties") or []
+        out["logs"].append(f"property_count={len(props)}")
     return out
 
 

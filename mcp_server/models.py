@@ -75,7 +75,24 @@ class ToolResponse(BaseModel):
     metrics: JewelryMetrics = Field(default_factory=JewelryMetrics)
     logs: list[str] = Field(default_factory=list)
     timing_ms: int = Field(..., ge=0, description="Server-side duration in milliseconds.")
+    result: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional tool-specific payload from the Blender bridge.",
+    )
 
     def to_json_dict(self) -> dict[str, Any]:
         """JSON-serializable dict for MCP tool results."""
-        return self.model_dump(mode="json")
+        data = self.model_dump(mode="json")
+        if data.get("result") is None:
+            data.pop("result", None)
+        return data
+
+
+class OperatorSchemaInput(BaseModel):
+    """Input for dynamic bpy.ops RNA introspection (Advertise-and-Activate)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operator_idname: str = Field(..., description="Full operator idname, e.g. mesh.bevel")
+    object_name: str | None = Field(default=None, description="Optional object to select as active before poll.")
+    mode: str | None = Field(default=None, description="Optional object mode to set before poll.")

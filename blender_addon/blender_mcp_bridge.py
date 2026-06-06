@@ -1687,6 +1687,95 @@ def _execute_bpy_ops_with_context(operator_callable, execution_method: str, op_k
         return operator_callable(**op_kwargs)
 
 
+def _find_operator_class_by_idname(operator_idname: str):
+    """Return bpy.types.Operator subclass for bl_idname, or None."""
+    for cls in bpy.types.Operator.__subclasses__():
+        if getattr(cls, "bl_idname", None) == operator_idname:
+            return cls
+    return None
+
+
+def _json_safe_rna_default(value):
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_rna_default(v) for v in value]
+    return str(value)
+
+
+def _should_skip_rna_property(prop) -> bool:
+    ident = prop.identifier
+    if ident.startswith("rna_type"):
+        return True
+    if ident in {"bl_rna", "bl_idname"}:
+        return True
+    if getattr(prop, "is_hidden", False):
+        return True
+    return False
+
+
+def _serialize_operator_rna_properties(bl_rna) -> list[dict]:
+    properties: list[dict] = []
+    for prop in bl_rna.properties:
+        if _should_skip_rna_property(prop):
+            continue
+        entry: dict = {
+            "name": prop.identifier,
+            "rna_type": prop.type,
+            "description": prop.description or "",
+            "default": _json_safe_rna_default(getattr(prop, "default", None)),
+            "is_enum": prop.type == "ENUM",
+            "enum_items": None,
+        }
+        if prop.type == "ENUM":
+            entry["enum_items"] = [
+                {
+                    "identifier": item.identifier,
+                    "name": item.name,
+                    "description": item.description or "",
+                }
+                for item in prop.enum_items
+            ]
+        properties.append(entry)
+    return properties
+
+
+def _apply_operator_context(payload: dict) -> dict | None:
+    """Select object and/or set mode from payload. Returns error dict or None on success."""
+    object_name = payload.get("object_name")
+    if object_name is not None:
+        if not isinstance(object_name, str) or not object_name.strip():
+            return {"code": "INVALID_INPUT", "message": "object_name must be a non-empty str if provided"}
+        obj = bpy.data.objects.get(object_name)
+        if obj is None:
+            return {"code": "OBJECT_NOT_FOUND", "message": f"Object not found: {object_name}"}
+        for it in bpy.data.objects:
+            it.select_set(False)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+
+    mode = payload.get("mode")
+    if mode is not None:
+        if not isinstance(mode, str) or not mode:
+            return {"code": "INVALID_INPUT", "message": "mode must be a non-empty str if provided"}
+        if bpy.context.mode != mode:
+            try:
+                bpy.ops.object.mode_set(mode=mode)
+            except Exception as exc:
+                return {"code": "OPERATOR_FAILED", "message": f"mode_set failed: {exc}"}
+    return None
+
+
+def _check_operator_poll(operator_callable) -> tuple[bool, str | None]:
+    try:
+        if hasattr(operator_callable, "poll") and callable(operator_callable.poll):
+            if not operator_callable.poll():
+                return False, "poll() returned False"
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+
 class BridgeServer(threading.Thread):
     def __init__(self, host: str, port: int):
         super().__init__(daemon=True)
@@ -2801,6 +2890,60 @@ def _execute_bridge_request(data: str) -> dict:
         if not out["ok"]:
             return {"ok": False, "request_id": request_id, "error": out["error"]}
         return {"ok": True, "request_id": request_id, "result": out["result"]}
+
+    if action == "operator_get_schema":
+        operator_idname = payload.get("operator_idname")
+        vmsg = _validate_operator_idname(operator_idname)
+        if vmsg is not None:
+            return {
+                "ok": False,
+                "request_id": request_id,
+                "error": {"code": "INVALID_INPUT", "message": vmsg},
+            }
+
+        ctx_err = _apply_operator_context(payload)
+        if ctx_err is not None:
+            return {
+                "ok": False,
+                "request_id": request_id,
+                "error": ctx_err,
+            }
+
+        try:
+            operator_callable = _resolve_bpy_ops_callable(operator_idname)
+        except AttributeError:
+            return {
+                "ok": False,
+                "request_id": request_id,
+                "error": {
+                    "code": "OPERATOR_NOT_FOUND",
+                    "message": f"no bpy.ops path for {operator_idname!r}",
+                },
+            }
+
+        poll_ok, poll_detail = _check_operator_poll(operator_callable)
+        op_cls = _find_operator_class_by_idname(operator_idname)
+        if op_cls is None:
+            return {
+                "ok": False,
+                "request_id": request_id,
+                "error": {
+                    "code": "OPERATOR_NOT_FOUND",
+                    "message": f"no Operator RNA class for {operator_idname!r}",
+                },
+            }
+
+        properties = _serialize_operator_rna_properties(op_cls.bl_rna)
+        return {
+            "ok": True,
+            "request_id": request_id,
+            "result": {
+                "operator_idname": operator_idname,
+                "poll_ok": poll_ok,
+                "poll_detail": poll_detail,
+                "properties": properties,
+            },
+        }
 
     if action == "node_tool_invoke":
         operator_idname = payload.get("operator_idname")

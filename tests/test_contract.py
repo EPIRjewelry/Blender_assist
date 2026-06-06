@@ -1000,6 +1000,51 @@ def test_render_still_no_camera(monkeypatch):
     ToolResponse.model_validate(out)
 
 
+def test_get_blender_operator_schema_success(monkeypatch):
+    from mcp_server.server import get_blender_operator_schema
+
+    def _fake_send_request(action, payload, config):
+        assert action == "operator_get_schema"
+        assert payload["operator_idname"] == "object.select_all"
+        assert payload["object_name"] == "Cube"
+        assert payload["mode"] == "OBJECT"
+        return {
+            "ok": True,
+            "request_id": "x",
+            "result": {
+                "operator_idname": "object.select_all",
+                "poll_ok": True,
+                "poll_detail": None,
+                "properties": [
+                    {
+                        "name": "action",
+                        "rna_type": "ENUM",
+                        "description": "Selection action",
+                        "default": "TOGGLE",
+                        "is_enum": True,
+                        "enum_items": [
+                            {"identifier": "TOGGLE", "name": "Toggle", "description": ""},
+                            {"identifier": "SELECT", "name": "Select", "description": ""},
+                        ],
+                    }
+                ],
+            },
+        }
+
+    monkeypatch.setattr("mcp_server.server.send_request", _fake_send_request)
+    out = get_blender_operator_schema(
+        "object.select_all",
+        object_name="Cube",
+        mode="OBJECT",
+    )
+    assert out["ok"] is True
+    assert out["result"]["poll_ok"] is True
+    assert len(out["result"]["properties"]) == 1
+    assert out["result"]["properties"][0]["name"] == "action"
+    assert any("property_count=1" in x for x in out["logs"])
+    ToolResponse.model_validate(out)
+
+
 def test_node_tool_invoke_success(monkeypatch):
     from mcp_server.server import node_tool_invoke
 
