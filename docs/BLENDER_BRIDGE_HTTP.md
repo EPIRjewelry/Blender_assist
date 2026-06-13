@@ -40,10 +40,11 @@ Operator Studio → workers/chat (blender_bridge_invoke)
 
 ## Run
 
-1. Blender addon → **Start MCP Bridge** (`8765`).
-2. `cp .env.example .env` — set `EPIR_OPERATOR_PANEL_SECRET` (same as Operator Studio).
-3. `python -m relay` from repo root (after `pip install -e ".[dev]"`).
-4. Named tunnel: `.\scripts\start-blender-bridge.ps1` (relay + cloudflared).
+**Setup raz:** `scripts/setup-blender-bridge-once.ps1` + `.env` z `EPIR_OPERATOR_PANEL_SECRET` (ta sama wartość co Operator Studio).
+
+**Codziennie (jeden klik):** Blender → sidebar **Blender MCP** → **Start MCP Bridge** — addon uruchamia TCP `:8765`, relay `:9876` i named tunnel (`bridge_orchestrator.py`). Operator Studio → zakładka **Blender** → status `online: true` w ~10 s.
+
+**Fallback (diagnostyka):** `scripts/start-blender-bridge.ps1` — relay + tunel bez Blendera.
 
 ## Environment
 

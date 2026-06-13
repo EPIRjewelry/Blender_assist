@@ -19,6 +19,7 @@ agent/.state/
 .blender_assist_state.json
 agent/.env
 .env
+.env.local
 .cloudflared/
 relay.log
 relay.out.log

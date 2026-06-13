@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Blender MCP Bridge",
     "author": "blender-mcp",
-    "version": (0, 8, 7),
+    "version": (0, 8, 8),
     "blender": (5, 1, 0),
     "location": "3D View > Sidebar > Blender MCP",
     "description": "Localhost socket bridge for MCP -> Blender commands",
@@ -15,6 +15,7 @@ import os
 import queue
 import re
 import socket
+import subprocess
 import threading
 import importlib.util
 from pathlib import Path
@@ -3135,11 +3136,89 @@ def _execute_bridge_request(data: str) -> dict:
     }
 
 
+def _default_blender_assist_root() -> str:
+    return str(Path(__file__).resolve().parent.parent)
+
+
+def _resolve_blender_assist_root(prefs) -> str:
+    custom = (getattr(prefs, "blender_assist_root", "") or "").strip()
+    if custom and os.path.isdir(custom):
+        return custom
+    return _default_blender_assist_root()
+
+
+def _orchestrator_script(root: str) -> str:
+    return str(Path(root) / "bridge_orchestrator.py")
+
+
+def _venv_python_for_root(root: str) -> str:
+    win = Path(root) / ".venv" / "Scripts" / "python.exe"
+    if win.is_file():
+        return str(win)
+    posix = Path(root) / ".venv" / "bin" / "python"
+    if posix.is_file():
+        return str(posix)
+    return "python"
+
+
+def _run_orchestrator(prefs, command: str) -> dict:
+    root = _resolve_blender_assist_root(prefs)
+    script = _orchestrator_script(root)
+    if not os.path.isfile(script):
+        return {"ok": False, "error": "missing_orchestrator", "message": f"Brak {script}"}
+    py = _venv_python_for_root(root)
+    try:
+        proc = subprocess.run(
+            [py, script, command, "--root", root],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+        if proc.stdout.strip():
+            try:
+                data = json.loads(proc.stdout.strip())
+                if proc.returncode != 0 and "ok" not in data:
+                    data["ok"] = False
+                return data
+            except json.JSONDecodeError:
+                pass
+        return {
+            "ok": proc.returncode == 0,
+            "error": proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}",
+        }
+    except (OSError, subprocess.SubprocessError, TimeoutError) as exc:
+        return {"ok": False, "error": "orchestrator_failed", "message": str(exc)}
+
+
+def _operator_stack_status_label(prefs) -> str:
+    data = _run_orchestrator(prefs, "status")
+    if not data.get("relay_up"):
+        return "Operator: relay offline"
+    if data.get("studio_ready"):
+        return "Operator Studio: online"
+    if data.get("tunnel_up"):
+        return "Operator: relay OK, public pending"
+    return "Operator: relay OK, tunnel offline"
+
+
 class MCPBridgePreferences(bpy.types.AddonPreferences):
     bl_idname = __name__
 
     host: bpy.props.StringProperty(name="Host", default="127.0.0.1")
     port: bpy.props.IntProperty(name="Port", default=8765, min=1, max=65535)
+    blender_assist_root: bpy.props.StringProperty(
+        name="Blender_assist root",
+        default="",
+        subtype="DIR_PATH",
+        description="Katalog repo Blender_assist (.env, relay). Puste = auto (addon w repo)",
+    )
+    auto_operator_stack: bpy.props.BoolProperty(
+        name="Operator Studio stack (1-click)",
+        default=True,
+        description="Start MCP Bridge uruchamia też relay :9876 i named tunnel cloudflared",
+    )
     allow_script_exec: bpy.props.BoolProperty(
         name="Allow remote script execution",
         default=False,
@@ -3150,13 +3229,15 @@ class MCPBridgePreferences(bpy.types.AddonPreferences):
         layout = self.layout
         layout.prop(self, "host")
         layout.prop(self, "port")
+        layout.prop(self, "blender_assist_root")
+        layout.prop(self, "auto_operator_stack")
         layout.prop(self, "allow_script_exec")
 
 
 class MCPBRIDGE_OT_start(bpy.types.Operator):
     bl_idname = "mcpbridge.start"
     bl_label = "Start MCP Bridge"
-    bl_description = "Start localhost bridge server"
+    bl_description = "Start localhost bridge + Operator Studio relay/tunnel (one click)"
 
     def execute(self, context):
         global _server
@@ -3164,21 +3245,35 @@ class MCPBRIDGE_OT_start(bpy.types.Operator):
         with _server_lock:
             if _server and _server.is_alive():
                 self.report({"INFO"}, "MCP bridge already running")
-                return {"FINISHED"}
-            _bridge_timer_register()
-            _server = BridgeServer(prefs.host, prefs.port)
-            _server.start()
-        self.report({"INFO"}, f"MCP bridge listening on {prefs.host}:{prefs.port}")
+            else:
+                _bridge_timer_register()
+                _server = BridgeServer(prefs.host, prefs.port)
+                _server.start()
+        if getattr(prefs, "auto_operator_stack", True):
+            stack = _run_orchestrator(prefs, "ensure")
+            if stack.get("ok"):
+                if stack.get("studio_ready"):
+                    self.report({"INFO"}, "MCP + Operator Studio stack online")
+                else:
+                    self.report({"INFO"}, "MCP bridge OK; tunnel/public may need a few seconds")
+            else:
+                msg = stack.get("message") or stack.get("error") or "stack failed"
+                self.report({"WARNING"}, f"Addon TCP OK; operator stack: {msg}")
+        else:
+            self.report({"INFO"}, f"MCP bridge listening on {prefs.host}:{prefs.port}")
         return {"FINISHED"}
 
 
 class MCPBRIDGE_OT_stop(bpy.types.Operator):
     bl_idname = "mcpbridge.stop"
     bl_label = "Stop MCP Bridge"
-    bl_description = "Stop localhost bridge server"
+    bl_description = "Stop bridge server and Operator Studio relay/tunnel"
 
     def execute(self, context):
         global _server
+        prefs = bpy.context.preferences.addons[__name__].preferences
+        if getattr(prefs, "auto_operator_stack", True):
+            _run_orchestrator(prefs, "stop")
         with _server_lock:
             if _server:
                 _server.stop()
@@ -3255,8 +3350,10 @@ class MCPBRIDGE_PT_panel(bpy.types.Panel):
         layout.operator("mcpbridge.world_set_hdri", icon="WORLD")
         layout.operator("mcpbridge.camera_frame_object", icon="VIEW_CAMERA")
         running = _server is not None and _server.is_alive()
-        layout.label(text=f"Status: {'Running' if running else 'Stopped'}")
+        layout.label(text=f"TCP :8765: {'Running' if running else 'Stopped'}")
         addon = bpy.context.preferences.addons.get(__name__)
+        if addon and getattr(addon.preferences, "auto_operator_stack", True):
+            layout.label(text=_operator_stack_status_label(addon.preferences))
         if addon and getattr(addon.preferences, "allow_script_exec", False):
             layout.label(text="Warning: remote script exec enabled", icon="ERROR")
 

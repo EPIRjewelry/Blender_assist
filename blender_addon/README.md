@@ -9,3 +9,11 @@ Current scope includes:
 - still rendering (`render_still`)
 
 Step 1: install the MCP Python package from the **repository root** (`pip install -e ".[dev]"`), then run `python -m mcp_server` or `python main.py` from that directory. See root [README.md](../README.md) (SSOT).
+
+## Operator Studio (one click)
+
+1. Once: `scripts/setup-blender-bridge-once.ps1` + `.env` with `EPIR_OPERATOR_PANEL_SECRET`.
+2. Each session: **Start MCP Bridge** in this addon — starts TCP `:8765`, relay `:9876`, and named Cloudflare tunnel via `bridge_orchestrator.py`.
+3. Smoke: Operator Studio → Blender tab → `OK — most odpowiada`.
+
+Fallback: `scripts/start-blender-bridge.ps1` (CLI only).
