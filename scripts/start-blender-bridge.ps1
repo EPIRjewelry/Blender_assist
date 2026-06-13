@@ -36,9 +36,23 @@ if (-not $env:EPIR_OPERATOR_PANEL_SECRET) {
 $venvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 $python = if (Test-Path $venvPython) { $venvPython } else { "python" }
 
-$relayLog = Join-Path $RepoRoot "relay.log"
-Write-Host "Starting relay on 127.0.0.1:9876 (log: $relayLog)"
-Start-Process -FilePath $python -ArgumentList "-m", "relay" -WorkingDirectory $RepoRoot -RedirectStandardOutput $relayLog -RedirectStandardError $relayLog -WindowStyle Hidden
+$relayLogOut = Join-Path $RepoRoot "relay.out.log"
+$relayLogErr = Join-Path $RepoRoot "relay.err.log"
+
+try {
+    $existing = Invoke-RestMethod -Uri "http://127.0.0.1:9876/health" -TimeoutSec 2
+    if ($existing.ok) {
+        Write-Host "Relay already running on 127.0.0.1:9876"
+    }
+} catch {
+    Write-Host "Starting relay on 127.0.0.1:9876 (logs: $relayLogOut, $relayLogErr)"
+    try {
+        Start-Process -FilePath $python -ArgumentList "-m", "relay" -WorkingDirectory $RepoRoot `
+            -RedirectStandardOutput $relayLogOut -RedirectStandardError $relayLogErr -WindowStyle Hidden
+    } catch {
+        throw "Failed to start relay process: $($_.Exception.Message). See $relayLogErr"
+    }
+}
 
 Start-Sleep -Seconds 2
 try {
@@ -46,13 +60,14 @@ try {
     Write-Host "Relay health: ok=$($health.ok) auth_configured=$($health.auth_configured)"
 } catch {
     Write-Warning "Relay health check failed: $_"
-    Write-Host "See $relayLog"
+    if (Test-Path $relayLogErr) { Get-Content $relayLogErr -Tail 10 }
+    throw "Relay did not start. Set EPIR_OPERATOR_PANEL_SECRET in .env (same as Operator Studio)."
 }
 
 $cf = Get-Command cloudflared -ErrorAction SilentlyContinue
 if ($cf) {
     $tunnelName = $env:BLENDER_CLOUDFLARED_TUNNEL
-    if (-not $tunnelName) { $tunnelName = "blender-bridge" }
+    if (-not $tunnelName) { $tunnelName = "epir-blender-bridge" }
     Write-Host "Starting cloudflared tunnel: $tunnelName"
     Start-Process -FilePath "cloudflared" -ArgumentList "tunnel", "run", $tunnelName -WindowStyle Hidden
 } else {
