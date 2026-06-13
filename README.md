@@ -90,6 +90,17 @@ Or with uv:
 uv pip install -e ".[dev]"
 ```
 
+## Operator Studio HTTP relay (Project B)
+
+For **Operator Studio** (browser), not Cursor stdio MCP:
+
+1. Blender addon → **Start MCP Bridge** (`8765`)
+2. Copy `.env.example` → `.env`, set `EPIR_OPERATOR_PANEL_SECRET` (same as Operator Studio)
+3. `python -m relay` — HTTP on `127.0.0.1:9876`
+4. Named tunnel: `.\scripts\start-blender-bridge.ps1`
+
+SSOT: [`docs/BLENDER_BRIDGE_HTTP.md`](docs/BLENDER_BRIDGE_HTTP.md). Worker calls `POST /v1/tools/{name}` with Bearer auth.
+
 ## Run (stdio — Cursor / Claude Desktop)
 
 ```bash

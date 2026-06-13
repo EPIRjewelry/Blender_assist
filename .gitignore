@@ -18,6 +18,10 @@ agent/output/
 agent/.state/
 .blender_assist_state.json
 agent/.env
+.env
+.cloudflared/
+relay.log
+debug-5f5a57.log
 cloudflare/node_modules/
 cloudflare/.wrangler/
 *.egg-info/
