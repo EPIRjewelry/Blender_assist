@@ -1,4 +1,4 @@
-"""Dispatch allowlisted tool names to existing mcp_server.server functions."""
+"""Dispatch MCP tool names to mcp_server.server functions (denylist-only for HTTP)."""
 
 from __future__ import annotations
 
@@ -8,20 +8,8 @@ from typing import Any
 
 from mcp_server import server as mcp_server
 
-from relay.allowlist import BLENDER_BRIDGE_ALLOWLIST_V1
-
-_TOOL_FN = {
-    "blender_ping": mcp_server.blender_ping,
-    "scene_list_objects": mcp_server.scene_list_objects,
-    "object_get_info": mcp_server.object_get_info,
-    "object_convert_to_mesh": mcp_server.object_convert_to_mesh,
-    "mesh_get_bbox_mm": mcp_server.mesh_get_bbox_mm,
-    "mesh_check_manifold": mcp_server.mesh_check_manifold,
-    "jewelry_mass_report": mcp_server.jewelry_mass_report,
-    "export_stl": mcp_server.export_stl,
-    "render_packshot": mcp_server.render_packshot,
-    "apply_material_preset": mcp_server.apply_material_preset,
-}
+from relay.allowlist import is_tool_denied
+from relay.tool_catalog import is_bridge_tool_allowed, resolve_bridge_tool_name
 
 
 def default_bridge_host() -> str:
@@ -37,21 +25,36 @@ def default_bridge_port() -> int:
 
 
 def invoke_tool(tool_name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
-    if tool_name not in BLENDER_BRIDGE_ALLOWLIST_V1:
+    resolved = resolve_bridge_tool_name(tool_name)
+
+    if is_tool_denied(resolved):
         return {
             "ok": False,
-            "error": {"code": "tool_not_allowed", "message": f"Tool not in allowlist v1: {tool_name}"},
+            "error": {"code": "tool_not_allowed", "message": f"Tool blocked for HTTP bridge: {resolved}"},
             "warnings": [],
             "metrics": {},
             "logs": [],
             "timing_ms": 0,
         }
 
-    fn = _TOOL_FN.get(tool_name)
-    if fn is None:
+    if not is_bridge_tool_allowed(resolved):
+        hint = ""
+        if "curve" in tool_name.lower():
+            hint = " Użyj curve_cutter_create dla krzywych/obrysów CAD."
         return {
             "ok": False,
-            "error": {"code": "tool_not_implemented", "message": f"No relay handler for {tool_name}"},
+            "error": {"code": "tool_not_found", "message": f"Unknown MCP tool: {tool_name}.{hint}"},
+            "warnings": [],
+            "metrics": {},
+            "logs": [],
+            "timing_ms": 0,
+        }
+
+    fn = getattr(mcp_server, resolved, None)
+    if fn is None or not callable(fn):
+        return {
+            "ok": False,
+            "error": {"code": "tool_not_implemented", "message": f"No relay handler for {resolved}"},
             "warnings": [],
             "metrics": {},
             "logs": [],

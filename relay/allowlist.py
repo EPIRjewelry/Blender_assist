@@ -1,18 +1,19 @@
-"""Allowlist v1 — must match workers/chat/src/internal-blender-tools.ts."""
+"""Bridge tool policy — denylist for HTTP relay (matches workers/chat internal-blender-tools.ts)."""
 
 from __future__ import annotations
 
-BLENDER_BRIDGE_ALLOWLIST_V1: frozenset[str] = frozenset(
+# ESOG: HTTP bridge must not expose arbitrary script / bpy.ops automation.
+BLENDER_BRIDGE_DENYLIST: frozenset[str] = frozenset(
     {
-        "blender_ping",
-        "scene_list_objects",
-        "object_get_info",
-        "object_convert_to_mesh",
-        "mesh_get_bbox_mm",
-        "mesh_check_manifold",
-        "jewelry_mass_report",
-        "export_stl",
-        "render_packshot",
-        "apply_material_preset",
+        "run_script",
+        "node_tool_invoke",
     }
 )
+
+
+def is_tool_denied(tool_name: str) -> bool:
+    return tool_name in BLENDER_BRIDGE_DENYLIST
+
+
+# Legacy alias — older docs/tests referenced allowlist v1.
+BLENDER_BRIDGE_ALLOWLIST_V1 = BLENDER_BRIDGE_DENYLIST

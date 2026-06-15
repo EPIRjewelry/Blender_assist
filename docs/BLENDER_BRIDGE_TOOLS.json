@@ -1,0 +1,136 @@
+{
+  "version": 2,
+  "policy": "denylist",
+  "denied": [
+    "node_tool_invoke",
+    "run_script"
+  ],
+  "aliases": {
+    "add_curve": "curve_cutter_create",
+    "add_curve_cutter": "curve_cutter_create",
+    "blender_add_curve": "curve_cutter_create",
+    "create_curve": "curve_cutter_create"
+  },
+  "tools": [
+    {
+      "name": "apply_material_preset",
+      "summary": "Apply a built-in material preset for Blender 5.1+ Cycles-oriented packshots."
+    },
+    {
+      "name": "blender_ping",
+      "summary": "Ping active Blender addon bridge over localhost TCP."
+    },
+    {
+      "name": "build_procedural_jewelry_material",
+      "summary": "Build and assign a procedural jewelry material with direct Blender API only (no bpy.ops)."
+    },
+    {
+      "name": "camera_frame_object",
+      "summary": "Fit a perspective camera to an object's evaluated world bounding box (bounding-sphere + default quarter view)."
+    },
+    {
+      "name": "casting_scale_isotropic",
+      "summary": "Apply isotropic scaling preset (e.g. for casting shrink compensation)."
+    },
+    {
+      "name": "curve_cutter_create",
+      "summary": "Create a 3D Bezier curve object with solid extrusion (cutter-ready volume) via bpy.data.curves RNA only."
+    },
+    {
+      "name": "export_stl",
+      "summary": "Export one mesh object to STL with pre-export manifold validation."
+    },
+    {
+      "name": "generate_parametric_solid",
+      "summary": "Generate a parametric CAD solid directly in Blender (current scope: ring_band)."
+    },
+    {
+      "name": "get_blender_operator_schema",
+      "summary": "Introspect a bpy.ops operator RNA schema (Advertise-and-Activate)."
+    },
+    {
+      "name": "jewelry_mass_report",
+      "summary": "CAD mass report: optionally enforce metric scene units (1 BU = 1 mm), evaluate mesh via Depsgraph,"
+    },
+    {
+      "name": "mesh_check_manifold",
+      "summary": "Check if evaluated mesh is manifold/watertight-like."
+    },
+    {
+      "name": "mesh_get_bbox_mm",
+      "summary": "Return object bounding-box dimensions in millimeters [x, y, z]."
+    },
+    {
+      "name": "mesh_get_materials",
+      "summary": "Return material slot names assigned to object."
+    },
+    {
+      "name": "mesh_get_volume_cm3",
+      "summary": "Return evaluated mesh volume in cm^3."
+    },
+    {
+      "name": "mesh_uv_unwrap_cylinder",
+      "summary": "UV unwrap mesh via cylinder projection (Z axis, Y align); restores prior interaction mode."
+    },
+    {
+      "name": "modifier_add_boolean_manifold",
+      "summary": "Add Boolean modifier with solver forced to MANIFOLD."
+    },
+    {
+      "name": "modifier_add_displace",
+      "summary": "Add or update Displace modifier: procedural texture, or optional image_path (UV coords) with vertex_group mask."
+    },
+    {
+      "name": "modifier_add_subdiv",
+      "summary": "Add Subdivision Surface modifier to object."
+    },
+    {
+      "name": "object_convert_to_mesh",
+      "summary": "Convert a compatible object (e.g. CURVE / FONT / SURFACE / META) to a mesh via Blender's"
+    },
+    {
+      "name": "object_get_info",
+      "summary": "Inspect any object: Blender `type`, world-space dimensions in mm, and for CURVE objects a short"
+    },
+    {
+      "name": "ping",
+      "summary": "Health check. Returns the standard envelope with empty jewelry metrics placeholders."
+    },
+    {
+      "name": "render_packshot",
+      "summary": "Run the jewelry packshot pipeline in one bridge call: shop scene prep, studio AREA rig, optional local HDRI world,"
+    },
+    {
+      "name": "render_still",
+      "summary": "Render the current scene to a single image file (write_still=True)."
+    },
+    {
+      "name": "scene_delete_object",
+      "summary": "Delete one object by name (unlink + remove)."
+    },
+    {
+      "name": "scene_list_objects",
+      "summary": "List scene object names from active Blender session."
+    },
+    {
+      "name": "scene_select_object",
+      "summary": "Select one object by name."
+    },
+    {
+      "name": "scene_set_active",
+      "summary": "Set one object as active in current view layer."
+    },
+    {
+      "name": "shop_ensure_scene",
+      "summary": "Prepare scene for packshots: METRIC units with 1 BU = 1 mm (scale_length 0.001), square-ish render resolution,"
+    },
+    {
+      "name": "studio_apply_lights",
+      "summary": "Place or update three neutral white Cycles AREA lights (key / fill / rim) in the studio collection."
+    },
+    {
+      "name": "world_set_hdri",
+      "summary": "Set scene world to an HDRI from a local file path only (.exr / .hdr). Replaces the world shader node tree."
+    }
+  ]
+}

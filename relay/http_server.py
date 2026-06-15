@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlparse
 
 from relay.auth import expected_bearer, relay_auth_enabled, verify_bearer
 from relay.invoke import invoke_tool
+from relay.tool_catalog import tool_catalog_dict
 
 _DEBUG_LOG = os.environ.get("EPIR_DEBUG_LOG", "debug-5f5a57.log")
 
@@ -72,6 +73,14 @@ class RelayHandler(BaseHTTPRequestHandler):
                     "auth_enabled": relay_auth_enabled(),
                     "auth_configured": bool(expected_bearer()) if relay_auth_enabled() else True,
                 },
+            )
+            return
+        if path == "/v1/tools":
+            catalog = tool_catalog_dict()
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                {"ok": True, "catalog": catalog},
             )
             return
         _json_response(

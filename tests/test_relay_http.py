@@ -105,6 +105,51 @@ def test_tool_requires_bearer_when_auth_on(monkeypatch):
         httpd.shutdown()
 
 
+def test_curve_cutter_create_not_allowlist_blocked(relay_env):
+    """HTTP bridge uses denylist only — CAD curve tools must reach invoke_tool."""
+    from relay.invoke import invoke_tool
+
+    with patch("relay.invoke.mcp_server.curve_cutter_create") as mocked:
+        mocked.return_value = {
+            "ok": True,
+            "error": None,
+            "warnings": [],
+            "metrics": {},
+            "logs": [],
+            "timing_ms": 1,
+        }
+        out = invoke_tool("curve_cutter_create", {"name": "cutter"})
+        assert out["ok"] is True
+        mocked.assert_called_once()
+
+
+def test_unknown_tool_returns_not_found(relay_env):
+    from relay.invoke import invoke_tool
+
+    out = invoke_tool("totally_fake_blender_tool", {})
+    assert out["ok"] is False
+    assert out["error"]["code"] == "tool_not_found"
+
+
+def test_list_tools_endpoint(relay_env):
+    import json
+    import urllib.request
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), RelayHandler)
+    port = httpd.server_address[1]
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/tools", timeout=10) as resp:
+            body = json.loads(resp.read().decode())
+        assert body["ok"] is True
+        names = [t["name"] for t in body["catalog"]["tools"]]
+        assert "curve_cutter_create" in names
+        assert len(names) == 30
+    finally:
+        httpd.shutdown()
+
+
 def test_disallowed_tool_returns_404(relay_env):
     import urllib.error
     import urllib.request
