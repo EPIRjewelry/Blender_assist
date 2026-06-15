@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from relay.auth import expected_bearer, verify_bearer
+from relay.auth import expected_bearer, relay_auth_enabled, verify_bearer
 from relay.invoke import invoke_tool
 
 _DEBUG_LOG = os.environ.get("EPIR_DEBUG_LOG", "debug-5f5a57.log")
@@ -69,7 +69,8 @@ class RelayHandler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "service": "blender-bridge-relay",
-                    "auth_configured": bool(expected_bearer()),
+                    "auth_enabled": relay_auth_enabled(),
+                    "auth_configured": bool(expected_bearer()) if relay_auth_enabled() else True,
                 },
             )
             return
@@ -152,9 +153,10 @@ def run_server(host: str | None = None, port: int | None = None) -> None:
     bind_host = (host or os.environ.get("RELAY_HTTP_HOST", "127.0.0.1")).strip() or "127.0.0.1"
     bind_port = port if port is not None else int(os.environ.get("RELAY_HTTP_PORT", "9876"))
 
-    if not expected_bearer():
+    if relay_auth_enabled() and not expected_bearer():
         raise SystemExit(
-            "EPIR_OPERATOR_PANEL_SECRET is not set. Copy .env.example to .env and set the same value as Operator Studio."
+            "RELAY_AUTH=1 but EPIR_OPERATOR_PANEL_SECRET is not set. "
+            "Unset RELAY_AUTH or set the secret in .env."
         )
 
     httpd = ThreadingHTTPServer((bind_host, bind_port), RelayHandler)

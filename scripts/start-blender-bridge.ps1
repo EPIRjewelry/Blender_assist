@@ -4,8 +4,7 @@
   Start HTTP relay (:9876) and optional named cloudflared tunnel for Operator Studio.
 
   Prerequisites:
-  - Blender addon MCP Bridge started (TCP :8765)
-  - .env with EPIR_OPERATOR_PANEL_SECRET
+  - Blender addon MCP Bridge started (TCP :8765), or run relay+tunnel only for diagnostics
 #>
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
@@ -28,10 +27,6 @@ function Import-DotEnv($path) {
 }
 
 Import-DotEnv (Join-Path $RepoRoot ".env")
-
-if (-not $env:EPIR_OPERATOR_PANEL_SECRET) {
-    throw "EPIR_OPERATOR_PANEL_SECRET not set. Run scripts\setup-blender-bridge-once.ps1 and edit .env"
-}
 
 $venvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 $python = if (Test-Path $venvPython) { $venvPython } else { "python" }
@@ -57,11 +52,11 @@ try {
 Start-Sleep -Seconds 2
 try {
     $health = Invoke-RestMethod -Uri "http://127.0.0.1:9876/health" -TimeoutSec 5
-    Write-Host "Relay health: ok=$($health.ok) auth_configured=$($health.auth_configured)"
+    Write-Host "Relay health: ok=$($health.ok) auth_enabled=$($health.auth_enabled)"
 } catch {
     Write-Warning "Relay health check failed: $_"
     if (Test-Path $relayLogErr) { Get-Content $relayLogErr -Tail 10 }
-    throw "Relay did not start. Set EPIR_OPERATOR_PANEL_SECRET in .env (same as Operator Studio)."
+    throw "Relay did not start. Check relay.err.log"
 }
 
 $cf = Get-Command cloudflared -ErrorAction SilentlyContinue

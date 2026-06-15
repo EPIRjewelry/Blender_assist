@@ -231,14 +231,7 @@ def stop_process(pid: int) -> None:
 def ensure_operator_stack(root_path: str | None = None) -> dict[str, Any]:
     root = repo_root(root_path)
     dotenv_path = root / ".env"
-    dotenv = load_dotenv(dotenv_path)
-    if not dotenv.get("EPIR_OPERATOR_PANEL_SECRET", "").strip():
-        return {
-            "ok": False,
-            "error": "missing_secret",
-            "message": "Ustaw EPIR_OPERATOR_PANEL_SECRET w .env (raz: setup-blender-bridge-once.ps1).",
-            "root": str(root),
-        }
+    dotenv = load_dotenv(dotenv_path) if dotenv_path.is_file() else {}
 
     env = apply_dotenv_to_process(os.environ.copy(), dotenv)
     log_dir = root / ".cloudflared" / "logs"

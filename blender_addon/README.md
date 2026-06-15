@@ -12,7 +12,7 @@ Step 1: install the MCP Python package from the **repository root** (`pip instal
 
 ## Operator Studio (one click)
 
-1. Once: `scripts/setup-blender-bridge-once.ps1` + `.env` with `EPIR_OPERATOR_PANEL_SECRET`.
+1. Once: `scripts/setup-blender-bridge-once.ps1` (optional `.env` from `.env.example`).
 2. Each session: **Start MCP Bridge** in this addon — starts TCP `:8765`, relay `:9876`, and named Cloudflare tunnel via `bridge_orchestrator.py`.
 3. Smoke: Operator Studio → Blender tab → `OK — most odpowiada`.
 

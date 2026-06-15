@@ -20,16 +20,21 @@ def test_load_dotenv_skips_comments(tmp_path: Path) -> None:
     assert loaded["BLENDER_RELAY_PORT"] == "9876"
 
 
-def test_ensure_operator_stack_missing_secret(tmp_path: Path) -> None:
-    (tmp_path / ".env").write_text("EPIR_OPERATOR_PANEL_SECRET=\n", encoding="utf-8")
-    with patch.object(bo, "repo_root", return_value=tmp_path):
+def test_ensure_operator_stack_without_env_file(tmp_path: Path) -> None:
+    with (
+        patch.object(bo, "repo_root", return_value=tmp_path),
+        patch.object(bo, "ensure_relay", return_value=(True, "relay_started", 111)),
+        patch.object(bo, "ensure_tunnel", return_value=(True, "tunnel_started", 222)),
+        patch.object(bo, "get_stack_status", return_value={"studio_ready": True, "relay_up": True}),
+        patch.object(bo, "read_pids", return_value={}),
+        patch.object(bo, "write_pids"),
+    ):
         result = bo.ensure_operator_stack(str(tmp_path))
-    assert result["ok"] is False
-    assert result["error"] == "missing_secret"
+    assert result["ok"] is True
 
 
 def test_ensure_operator_stack_ok(tmp_path: Path) -> None:
-    (tmp_path / ".env").write_text("EPIR_OPERATOR_PANEL_SECRET=op-secret\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("RELAY_AUTH=0\n", encoding="utf-8")
 
     with (
         patch.object(bo, "repo_root", return_value=tmp_path),

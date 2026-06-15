@@ -33,7 +33,7 @@ if (-not (Test-Path $envFile)) {
         throw ".env.example missing in $RepoRoot"
     }
     Copy-Item $example $envFile
-    Write-Host "Created .env — set EPIR_OPERATOR_PANEL_SECRET (same value as Operator Studio)."
+    Write-Host "Created .env from .env.example (RELAY_AUTH=0 by default — no PC secret needed)."
 } else {
     Write-Host ".env already exists."
 }
@@ -98,9 +98,8 @@ ingress:
 Write-Host @"
 
 Next steps:
-1. Edit .env — EPIR_OPERATOR_PANEL_SECRET (same as Operator Studio panel key)
-2. Daily: Blender addon Start MCP Bridge (:8765), then .\scripts\start-blender-bridge.ps1
-3. Operator Studio -> Blender tab -> Sprawdz most
+1. Daily: Blender addon -> Start MCP Bridge (relay + tunnel start automatically)
+2. Operator Studio -> Blender tab (only EPIR_OPERATOR_PANEL_SECRET in Studio UI)
 
 Tunnel name default: epir-blender-bridge (override BLENDER_CLOUDFLARED_TUNNEL in .env)
 "@
