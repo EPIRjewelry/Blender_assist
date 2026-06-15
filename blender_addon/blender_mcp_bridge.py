@@ -17,6 +17,7 @@ import re
 import socket
 import subprocess
 import threading
+import time
 import importlib.util
 from pathlib import Path
 from contextlib import redirect_stderr, redirect_stdout
@@ -3181,6 +3182,28 @@ def _run_orchestrator(prefs, command: str) -> dict:
                 data = json.loads(proc.stdout.strip())
                 if proc.returncode != 0 and "ok" not in data:
                     data["ok"] = False
+                # #region agent log
+                try:
+                    log_path = Path(__file__).resolve().parent.parent.parent / "aplikacja_epir" / "debug-34c45b.log"
+                    entry = {
+                        "sessionId": "34c45b",
+                        "location": "blender_mcp_bridge.py:_run_orchestrator",
+                        "message": f"orchestrator_{command}",
+                        "data": {
+                            "ok": data.get("ok"),
+                            "relay_up": data.get("relay_up"),
+                            "tunnel_up": data.get("tunnel_up"),
+                            "public_up": data.get("public_up"),
+                            "error": str(data.get("error") or "")[:120],
+                        },
+                        "timestamp": int(time.time() * 1000),
+                        "hypothesisId": "B",
+                    }
+                    with log_path.open("a", encoding="utf-8") as fh:
+                        fh.write(json.dumps(entry, ensure_ascii=True) + "\n")
+                except OSError:
+                    pass
+                # #endregion
                 return data
             except json.JSONDecodeError:
                 pass

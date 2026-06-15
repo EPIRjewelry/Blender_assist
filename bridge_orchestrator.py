@@ -24,6 +24,27 @@ DEFAULT_RELAY_PORT = 9876
 DEFAULT_PUBLIC_ORIGIN = "https://blender-bridge.epirbizuteria.pl"
 DEFAULT_TUNNEL_NAME = "epir-blender-bridge"
 PID_FILE_NAME = "bridge_stack.pids.json"
+_DEBUG_LOG = Path(__file__).resolve().parent.parent / "aplikacja_epir" / "debug-34c45b.log"
+
+
+def _agent_debug_log(location: str, message: str, data: dict[str, Any], hypothesis_id: str) -> None:
+    # #region agent log
+    try:
+        entry = {
+            "sessionId": "34c45b",
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+            "hypothesisId": hypothesis_id,
+            "runId": os.environ.get("EPIR_DEBUG_RUN_ID", "orchestrator"),
+        }
+        _DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with _DEBUG_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=True) + "\n")
+    except OSError:
+        pass
+    # #endregion
 
 
 def repo_root(explicit: str | None = None) -> Path:
@@ -188,7 +209,11 @@ def ensure_relay(root: Path, env: dict[str, str], log_dir: Path) -> tuple[bool, 
 def ensure_tunnel(root: Path, log_dir: Path) -> tuple[bool, str, int | None]:
     config = root / ".cloudflared" / "config.yml"
     if not config.is_file():
-        return False, "missing_cloudflared_config", None
+        user_cfg = Path.home() / ".cloudflared" / "config.yml"
+        if user_cfg.is_file():
+            config = user_cfg
+        else:
+            return False, "missing_cloudflared_config", None
 
     pids = read_pids(root)
     existing = pids.get("tunnel")
@@ -264,9 +289,36 @@ def ensure_operator_stack(root_path: str | None = None) -> dict[str, Any]:
     if not tunnel_ok:
         status["ok"] = False
         status["error"] = tunnel_msg
+        _agent_debug_log(
+            "bridge_orchestrator.py:ensure",
+            "ensure_failed_tunnel",
+            {"relay_ok": relay_ok, "tunnel_msg": tunnel_msg, "relay_msg": relay_msg},
+            "B",
+        )
         return status
 
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        status = get_stack_status(str(root))
+        if status.get("public_up"):
+            break
+        time.sleep(1)
+
+    status = get_stack_status(str(root))
+    status["relay_action"] = relay_msg
+    status["tunnel_action"] = tunnel_msg
     status["ok"] = True
+    _agent_debug_log(
+        "bridge_orchestrator.py:ensure",
+        "ensure_complete",
+        {
+            "relay_up": status.get("relay_up"),
+            "tunnel_up": status.get("tunnel_up"),
+            "public_up": status.get("public_up"),
+            "studio_ready": status.get("studio_ready"),
+        },
+        "A",
+    )
     return status
 
 
