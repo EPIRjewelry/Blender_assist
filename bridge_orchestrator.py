@@ -24,28 +24,6 @@ DEFAULT_RELAY_PORT = 9876
 DEFAULT_PUBLIC_ORIGIN = "https://blender-bridge.epirbizuteria.pl"
 DEFAULT_TUNNEL_NAME = "epir-blender-bridge"
 PID_FILE_NAME = "bridge_stack.pids.json"
-_DEBUG_LOG = Path(__file__).resolve().parent.parent / "aplikacja_epir" / "debug-34c45b.log"
-
-
-def _agent_debug_log(location: str, message: str, data: dict[str, Any], hypothesis_id: str) -> None:
-    # #region agent log
-    try:
-        entry = {
-            "sessionId": "34c45b",
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-            "hypothesisId": hypothesis_id,
-            "runId": os.environ.get("EPIR_DEBUG_RUN_ID", "orchestrator"),
-        }
-        _DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with _DEBUG_LOG.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(entry, ensure_ascii=True) + "\n")
-    except OSError:
-        pass
-    # #endregion
-
 
 def repo_root(explicit: str | None = None) -> Path:
     if explicit and explicit.strip():
@@ -190,7 +168,16 @@ def _relay_err_tail(log_dir: Path, lines: int = 5) -> str:
 
 def ensure_relay(root: Path, env: dict[str, str], log_dir: Path) -> tuple[bool, str, int | None]:
     if relay_health():
-        return True, "relay_already_running", None
+        active = pid_listening_on_port(DEFAULT_RELAY_PORT)
+        if active:
+            return True, "relay_already_running", active
+        return True, "relay_already_running", read_pids(root).get("relay")
+
+    cleanup_relay_processes(root)
+    time.sleep(0.5)
+    if relay_health():
+        active = pid_listening_on_port(DEFAULT_RELAY_PORT)
+        return True, "relay_already_running", active
 
     py = venv_python(root)
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -228,8 +215,11 @@ def ensure_tunnel(root: Path, log_dir: Path) -> tuple[bool, str, int | None]:
 
     pids = read_pids(root)
     existing = pids.get("tunnel")
-    if existing and process_alive(existing):
+    if existing and process_alive(existing) and public_health():
         return True, "tunnel_already_running", existing
+
+    cleanup_tunnel_processes(root)
+    time.sleep(0.5)
 
     cf = find_cloudflared()
     if not cf:
@@ -262,6 +252,150 @@ def stop_process(pid: int) -> None:
             os.kill(pid, 15)
         except OSError:
             pass
+
+
+def pid_listening_on_port(port: int, host: str = "127.0.0.1") -> int | None:
+    """Return PID bound to TCP port, or None."""
+    if os.name == "nt":
+        try:
+            out = subprocess.run(
+                ["netstat", "-ano"],
+                capture_output=True,
+                text=True,
+                timeout=8,
+                check=False,
+            )
+            needle = f"{host}:{port}"
+            for line in out.stdout.splitlines():
+                if "LISTENING" not in line or needle not in line.replace("0.0.0.0", host):
+                    continue
+                parts = line.split()
+                if parts:
+                    try:
+                        return int(parts[-1])
+                    except ValueError:
+                        continue
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return None
+    try:
+        out = subprocess.run(
+            ["ss", "-ltnp", f"sport = :{port}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        for line in out.stdout.splitlines():
+            if "pid=" not in line:
+                continue
+            chunk = line.split("pid=", 1)[1]
+            pid_str = chunk.split(",", 1)[0]
+            try:
+                return int(pid_str)
+            except ValueError:
+                continue
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def _pids_matching_command(substrings: tuple[str, ...]) -> list[int]:
+    found: list[int] = []
+    if os.name == "nt":
+        try:
+            ps_cmd = (
+                "Get-CimInstance Win32_Process | "
+                "Where-Object { $_.CommandLine } | "
+                "ForEach-Object { $_.ProcessId.ToString() + '|' + $_.CommandLine }"
+            )
+            out = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_cmd],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            for line in out.stdout.splitlines():
+                if "|" not in line:
+                    continue
+                pid_part, cmd = line.split("|", 1)
+                if all(s in cmd for s in substrings):
+                    try:
+                        found.append(int(pid_part.strip()))
+                    except ValueError:
+                        continue
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return sorted(set(found))
+    try:
+        out = subprocess.run(["ps", "-eo", "pid,args"], capture_output=True, text=True, timeout=8, check=False)
+        for line in out.stdout.splitlines()[1:]:
+            parts = line.strip().split(None, 1)
+            if len(parts) != 2:
+                continue
+            pid_str, cmd = parts
+            if all(s in cmd for s in substrings):
+                try:
+                    found.append(int(pid_str))
+                except ValueError:
+                    continue
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return sorted(set(found))
+
+
+def find_relay_pids(root: Path) -> list[int]:
+    root_marker = str(root.resolve())
+    return _pids_matching_command(("-m", "relay", root_marker))
+
+
+def find_tunnel_pids(root: Path) -> list[int]:
+    root_marker = str(root.resolve())
+    cfg = str((root / ".cloudflared" / "config.yml").resolve())
+    found: set[int] = set()
+    for needles in (
+        ("cloudflared", root_marker),
+        ("cloudflared", "tunnel", DEFAULT_TUNNEL_NAME),
+        ("cloudflared", cfg.replace("\\", "/")),
+        ("cloudflared", cfg),
+    ):
+        found.update(_pids_matching_command(needles))
+    return sorted(found)
+
+
+def cleanup_relay_processes(root: Path, *, keep_pid: int | None = None) -> list[int]:
+    """Kill stale relay PIDs for this repo (except keep_pid). Returns killed PIDs."""
+    candidates = set(find_relay_pids(root))
+    port_pid = pid_listening_on_port(DEFAULT_RELAY_PORT)
+    if port_pid:
+        candidates.add(port_pid)
+    stored = read_pids(root).get("relay")
+    if stored:
+        candidates.add(stored)
+    killed: list[int] = []
+    for pid in sorted(candidates):
+        if keep_pid is not None and pid == keep_pid:
+            continue
+        if process_alive(pid):
+            stop_process(pid)
+            killed.append(pid)
+    return killed
+
+
+def cleanup_tunnel_processes(root: Path, *, keep_pid: int | None = None) -> list[int]:
+    candidates = set(find_tunnel_pids(root))
+    stored = read_pids(root).get("tunnel")
+    if stored:
+        candidates.add(stored)
+    killed: list[int] = []
+    for pid in sorted(candidates):
+        if keep_pid is not None and pid == keep_pid:
+            continue
+        if process_alive(pid):
+            stop_process(pid)
+            killed.append(pid)
+    return killed
 
 
 def ensure_operator_stack(root_path: str | None = None) -> dict[str, Any]:
@@ -303,12 +437,6 @@ def ensure_operator_stack(root_path: str | None = None) -> dict[str, Any]:
     if not tunnel_ok:
         status["ok"] = False
         status["error"] = tunnel_msg
-        _agent_debug_log(
-            "bridge_orchestrator.py:ensure",
-            "ensure_failed_tunnel",
-            {"relay_ok": relay_ok, "tunnel_msg": tunnel_msg, "relay_msg": relay_msg},
-            "B",
-        )
         return status
 
     deadline = time.time() + 20
@@ -322,29 +450,18 @@ def ensure_operator_stack(root_path: str | None = None) -> dict[str, Any]:
     status["relay_action"] = relay_msg
     status["tunnel_action"] = tunnel_msg
     status["ok"] = True
-    _agent_debug_log(
-        "bridge_orchestrator.py:ensure",
-        "ensure_complete",
-        {
-            "relay_up": status.get("relay_up"),
-            "tunnel_up": status.get("tunnel_up"),
-            "public_up": status.get("public_up"),
-            "studio_ready": status.get("studio_ready"),
-        },
-        "A",
-    )
     return status
 
 
 def stop_operator_stack(root_path: str | None = None) -> dict[str, Any]:
     root = repo_root(root_path)
-    pids = read_pids(root)
-    for key in ("tunnel", "relay"):
-        pid = pids.get(key)
-        if pid:
-            stop_process(pid)
+    killed_relay = cleanup_relay_processes(root)
+    killed_tunnel = cleanup_tunnel_processes(root)
     write_pids(root, {})
-    return get_stack_status(str(root))
+    status = get_stack_status(str(root))
+    status["killed_relay"] = killed_relay
+    status["killed_tunnel"] = killed_tunnel
+    return status
 
 
 def get_stack_status(root_path: str | None = None) -> dict[str, Any]:

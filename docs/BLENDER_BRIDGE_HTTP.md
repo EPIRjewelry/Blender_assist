@@ -26,10 +26,7 @@ python scripts/export_bridge_tool_catalog.py
 
 Copy the same JSON to `aplikacja_epir/workers/chat/src/blender-bridge-tools.json` (worker enum + CI).
 
-**Policy:** denylist (not allowlist). **30 tools** pass through HTTP. **Blocked:**
-
-- `run_script`
-- `node_tool_invoke`
+**Policy:** denylist (empty for solo operator). **32 tools** pass through HTTP, including `run_script` and `node_tool_invoke`. Addon gates script exec (`BLENDER_MCP_ALLOW_SCRIPT_EXEC`, `confirm=True`, addon pref).
 
 **Aliases** (model typos → real tool):
 
@@ -84,7 +81,7 @@ Worker origin: `BLENDER_BRIDGE_ORIGIN` in `workers/chat/wrangler.toml` (not a se
 | Code | Meaning |
 |------|---------|
 | `unauthorized` | Bearer mismatch when `RELAY_AUTH=1` |
-| `tool_not_allowed` | Denylisted (`run_script`, `node_tool_invoke`) |
+| `tool_not_allowed` | Denylisted tool (denylist empty by default) |
 | `tool_not_found` | Unknown MCP name (check `/v1/tools` or aliases) |
 | `BLENDER_OFFLINE` | Addon not listening |
 | `BRIDGE_TIMEOUT` | Blender main thread busy |

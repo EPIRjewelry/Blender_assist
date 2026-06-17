@@ -1,10 +1,7 @@
 {
   "version": 2,
   "policy": "denylist",
-  "denied": [
-    "node_tool_invoke",
-    "run_script"
-  ],
+  "denied": [],
   "aliases": {
     "add_curve": "curve_cutter_create",
     "add_curve_cutter": "curve_cutter_create",
@@ -85,6 +82,10 @@
       "summary": "Add Subdivision Surface modifier to object."
     },
     {
+      "name": "node_tool_invoke",
+      "summary": "Invoke any Blender operator by full RNA idname (e.g. Geometry Node Tools in 5.1 register under bpy.ops)."
+    },
+    {
       "name": "object_convert_to_mesh",
       "summary": "Convert a compatible object (e.g. CURVE / FONT / SURFACE / META) to a mesh via Blender's"
     },
@@ -103,6 +104,10 @@
     {
       "name": "render_still",
       "summary": "Render the current scene to a single image file (write_still=True)."
+    },
+    {
+      "name": "run_script",
+      "summary": "Execute Python source inside Blender via the addon bridge."
     },
     {
       "name": "scene_delete_object",

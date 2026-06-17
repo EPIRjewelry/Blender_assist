@@ -145,12 +145,12 @@ def test_list_tools_endpoint(relay_env):
         assert body["ok"] is True
         names = [t["name"] for t in body["catalog"]["tools"]]
         assert "curve_cutter_create" in names
-        assert len(names) == 30
+        assert len(names) == 32
     finally:
         httpd.shutdown()
 
 
-def test_disallowed_tool_returns_404(relay_env):
+def test_unknown_tool_returns_not_found(relay_env):
     import urllib.error
     import urllib.request
 
@@ -160,15 +160,15 @@ def test_disallowed_tool_returns_404(relay_env):
     thread.start()
     try:
         req = urllib.request.Request(
-            f"http://127.0.0.1:{port}/v1/tools/node_tool_invoke",
+            f"http://127.0.0.1:{port}/v1/tools/not_a_real_mcp_tool_xyz",
             data=b"{}",
             method="POST",
             headers={"Content-Type": "application/json"},
         )
         with pytest.raises(urllib.error.HTTPError) as exc:
             urllib.request.urlopen(req, timeout=5)
-        assert exc.value.code == 404
+        assert exc.value.code == 502
         body = json.loads(exc.value.read().decode())
-        assert body["error"]["code"] == "tool_not_allowed"
+        assert body["error"]["code"] == "tool_not_found"
     finally:
         httpd.shutdown()

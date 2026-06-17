@@ -53,8 +53,8 @@ def test_ensure_operator_stack_ok(tmp_path: Path) -> None:
 def test_stop_operator_stack_kills_pids(tmp_path: Path) -> None:
     with (
         patch.object(bo, "repo_root", return_value=tmp_path),
-        patch.object(bo, "read_pids", return_value={"relay": 10, "tunnel": 20}),
-        patch.object(bo, "stop_process") as stop_process,
+        patch.object(bo, "cleanup_relay_processes", return_value=[10]) as cleanup_relay,
+        patch.object(bo, "cleanup_tunnel_processes", return_value=[20]) as cleanup_tunnel,
         patch.object(bo, "write_pids") as write_pids,
         patch.object(
             bo,
@@ -64,8 +64,11 @@ def test_stop_operator_stack_kills_pids(tmp_path: Path) -> None:
     ):
         result = bo.stop_operator_stack(str(tmp_path))
 
-    assert stop_process.call_count == 2
+    cleanup_relay.assert_called_once_with(tmp_path)
+    cleanup_tunnel.assert_called_once_with(tmp_path)
     write_pids.assert_called_with(tmp_path, {})
+    assert result["killed_relay"] == [10]
+    assert result["killed_tunnel"] == [20]
     assert result["studio_ready"] is False
 
 

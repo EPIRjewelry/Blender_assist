@@ -11,9 +11,9 @@ from relay.tool_catalog import list_bridge_tools, tool_catalog_dict
 def test_bridge_tools_include_curve_cutter_create():
     names = list_bridge_tools()
     assert "curve_cutter_create" in names
-    assert "run_script" not in names
-    assert "node_tool_invoke" not in names
-    assert len(names) == 30
+    assert "run_script" in names
+    assert "node_tool_invoke" in names
+    assert len(names) == 32
 
 
 def test_blender_add_curve_alias_resolves():
