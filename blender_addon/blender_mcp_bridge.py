@@ -3156,8 +3156,6 @@ def _default_blender_assist_root() -> str:
     for candidate in (
         _EPIR_BLENDER_ASSIST_ROOT,
         home / "Blender Assets" / "Blender_assist",
-        Path("D:/Blender_Assist"),
-        Path("D:/Blender_assist"),
         home / "Blender_assist",
         home / "source" / "Blender_assist",
     ):
@@ -3243,9 +3241,39 @@ def _run_orchestrator(prefs, command: str) -> dict:
         return {"ok": False, "error": "orchestrator_failed", "message": str(exc)}
 
 
-def _operator_stack_status_label(prefs) -> str:
+_ORCHESTRATOR_STATUS_TTL_S = 5.0
+_orchestrator_status_cache: dict | None = None
+_orchestrator_status_at: float = 0.0
+
+
+def _invalidate_orchestrator_status_cache() -> None:
+    global _orchestrator_status_cache, _orchestrator_status_at
+    _orchestrator_status_cache = None
+    _orchestrator_status_at = 0.0
+
+
+def _orchestrator_status_cached(prefs, force: bool = False) -> dict:
+    global _orchestrator_status_cache, _orchestrator_status_at
+    now = time.monotonic()
+    if (
+        not force
+        and _orchestrator_status_cache is not None
+        and (now - _orchestrator_status_at) < _ORCHESTRATOR_STATUS_TTL_S
+    ):
+        return _orchestrator_status_cache
     data = _run_orchestrator(prefs, "status")
+    _orchestrator_status_cache = data
+    _orchestrator_status_at = now
+    return data
+
+
+def _operator_stack_status_label(prefs, force: bool = False) -> str:
+    data = _orchestrator_status_cached(prefs, force=force)
     if not data.get("relay_up"):
+        detail = (data.get("error_detail") or data.get("error") or "").strip()
+        if detail:
+            short = detail if len(detail) <= 80 else detail[:77] + "..."
+            return f"Operator: relay offline ({short})"
         return "Operator: relay offline"
     if data.get("studio_ready"):
         return "Operator Studio: online"
@@ -3301,6 +3329,7 @@ class MCPBRIDGE_OT_start(bpy.types.Operator):
                 _server = BridgeServer(prefs.host, prefs.port)
                 _server.start()
         if getattr(prefs, "auto_operator_stack", True):
+            _invalidate_orchestrator_status_cache()
             stack = _run_orchestrator(prefs, "ensure")
             if stack.get("ok"):
                 if stack.get("studio_ready"):
@@ -3309,13 +3338,15 @@ class MCPBRIDGE_OT_start(bpy.types.Operator):
                     self.report({"INFO"}, "MCP bridge OK; tunnel/public may need a few seconds")
             else:
                 msg = stack.get("message") or stack.get("error") or "stack failed"
+                detail = (stack.get("error_detail") or "").strip()
                 root = _resolve_blender_assist_root(prefs)
-                self.report(
-                    {"WARNING"},
-                    f"Addon TCP OK; operator stack: {msg} (root: {root})",
-                )
+                report = f"Addon TCP OK; operator stack: {msg} (root: {root})"
+                if detail:
+                    report = f"{report} — {detail[:120]}"
+                self.report({"WARNING"}, report)
         else:
             self.report({"INFO"}, f"MCP bridge listening on {prefs.host}:{prefs.port}")
+        _invalidate_orchestrator_status_cache()
         return {"FINISHED"}
 
 
@@ -3329,6 +3360,7 @@ class MCPBRIDGE_OT_stop(bpy.types.Operator):
         prefs = bpy.context.preferences.addons[__name__].preferences
         if getattr(prefs, "auto_operator_stack", True):
             _run_orchestrator(prefs, "stop")
+        _invalidate_orchestrator_status_cache()
         with _server_lock:
             if _server:
                 _server.stop()

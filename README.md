@@ -12,6 +12,13 @@ Repozytorium: **[github.com/EPIRjewelry/Blender_assist](https://github.com/EPIRj
 
 Przed sesją grafika: `git status` bez `UU` (nierozwiązane konflikty). Smoke mostu: `.\scripts\smoke-bridge-health.ps1`.
 
+### Git — nie psuj relay
+
+- **Nie używaj** `git stash pop` na tym repo bez wcześniejszego `git status` (stash z lokalnymi zmianami w `relay/` powodował markery `<<<<<<<` i pad relay).
+- Po `git pull`: `python scripts/ci/check_conflict_markers.py` oraz `.\scripts\smoke-bridge-health.ps1`.
+- **`blender_ping` ≠ stan sceny** — puste `metrics` w ping to norma; scenę sprawdzaj narzędziami `scene_list_objects` / `mesh_get_bbox_mm`.
+- **Jeden klon:** `D:\Blender Assets\Blender_assist` — nie twórz `D:\Blender_Assist` na root D:.
+
 | Składnik | Ścieżka (ogólny przykład po `git clone`) |
 |----------|---------------------------------------------|
 | **Blender add-on** | `<repo>\blender_addon\blender_mcp_bridge.py` |

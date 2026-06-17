@@ -35,5 +35,10 @@ cloudflare/.wrangler/
 *.stl
 Untitled*
 
+# Local scratch / experiments (not part of bridge)
+_temp_*.py
+ring_shank_waves_apply.py
+ring_zone_materials.py
+
 # --- Cursor SSOT Index ---
 !.cursor/index.mdc
