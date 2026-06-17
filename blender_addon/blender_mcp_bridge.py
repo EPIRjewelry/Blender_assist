@@ -3137,15 +3137,43 @@ def _execute_bridge_request(data: str) -> dict:
     }
 
 
+_EPIR_BLENDER_ASSIST_ROOT = Path("D:/Blender Assets/Blender_assist")
+
+
+def _looks_like_blender_assist_root(path: Path) -> bool:
+    return path.is_dir() and (path / "bridge_orchestrator.py").is_file()
+
+
 def _default_blender_assist_root() -> str:
-    return str(Path(__file__).resolve().parent.parent)
+    bridge_path = Path(__file__).resolve()
+    if bridge_path.parent.name == "blender_addon":
+        return str(bridge_path.parent.parent)
+    env_root = (os.environ.get("BLENDER_ASSIST_ROOT") or "").strip()
+    if env_root and _looks_like_blender_assist_root(Path(env_root)):
+        return str(Path(env_root).resolve())
+    # Edit > Preferences > Install copies only this .py — repo root is not parent.parent.
+    home = Path.home()
+    for candidate in (
+        _EPIR_BLENDER_ASSIST_ROOT,
+        home / "Blender Assets" / "Blender_assist",
+        Path("D:/Blender_Assist"),
+        Path("D:/Blender_assist"),
+        home / "Blender_assist",
+        home / "source" / "Blender_assist",
+    ):
+        if _looks_like_blender_assist_root(candidate):
+            return str(candidate.resolve())
+    return str(bridge_path.parent.parent)
 
 
 def _resolve_blender_assist_root(prefs) -> str:
     custom = (getattr(prefs, "blender_assist_root", "") or "").strip()
-    if custom and os.path.isdir(custom):
-        return custom
-    return _default_blender_assist_root()
+    if custom and _looks_like_blender_assist_root(Path(custom)):
+        return str(Path(custom).resolve())
+    discovered = _default_blender_assist_root()
+    if _looks_like_blender_assist_root(Path(discovered)):
+        return discovered
+    return discovered
 
 
 def _orchestrator_script(root: str) -> str:
@@ -3233,9 +3261,9 @@ class MCPBridgePreferences(bpy.types.AddonPreferences):
     port: bpy.props.IntProperty(name="Port", default=8765, min=1, max=65535)
     blender_assist_root: bpy.props.StringProperty(
         name="Blender_assist root",
-        default="",
+        default="D:\\Blender Assets\\Blender_assist",
         subtype="DIR_PATH",
-        description="Katalog repo Blender_assist (.env, relay). Puste = auto (addon w repo)",
+        description="Repo Blender_assist (musi zawierać bridge_orchestrator.py). SSOT: D:\\Blender Assets\\Blender_assist",
     )
     auto_operator_stack: bpy.props.BoolProperty(
         name="Operator Studio stack (1-click)",
@@ -3281,7 +3309,11 @@ class MCPBRIDGE_OT_start(bpy.types.Operator):
                     self.report({"INFO"}, "MCP bridge OK; tunnel/public may need a few seconds")
             else:
                 msg = stack.get("message") or stack.get("error") or "stack failed"
-                self.report({"WARNING"}, f"Addon TCP OK; operator stack: {msg}")
+                root = _resolve_blender_assist_root(prefs)
+                self.report(
+                    {"WARNING"},
+                    f"Addon TCP OK; operator stack: {msg} (root: {root})",
+                )
         else:
             self.report({"INFO"}, f"MCP bridge listening on {prefs.host}:{prefs.port}")
         return {"FINISHED"}
@@ -3376,7 +3408,13 @@ class MCPBRIDGE_PT_panel(bpy.types.Panel):
         layout.label(text=f"TCP :8765: {'Running' if running else 'Stopped'}")
         addon = bpy.context.preferences.addons.get(__name__)
         if addon and getattr(addon.preferences, "auto_operator_stack", True):
-            layout.label(text=_operator_stack_status_label(addon.preferences))
+            prefs = addon.preferences
+            root = _resolve_blender_assist_root(prefs)
+            orch = _orchestrator_script(root)
+            if not os.path.isfile(orch):
+                layout.label(text=f"Brak: {orch}", icon="ERROR")
+            else:
+                layout.label(text=_operator_stack_status_label(prefs))
         if addon and getattr(addon.preferences, "allow_script_exec", False):
             layout.label(text="Warning: remote script exec enabled", icon="ERROR")
 

@@ -177,6 +177,17 @@ def public_health(origin: str = DEFAULT_PUBLIC_ORIGIN) -> bool:
         return False
 
 
+def _relay_err_tail(log_dir: Path, lines: int = 5) -> str:
+    err_log = log_dir / "relay.err.log"
+    if not err_log.is_file():
+        return ""
+    try:
+        tail = err_log.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
+        return "\n".join(line.strip() for line in tail if line.strip())
+    except OSError:
+        return ""
+
+
 def ensure_relay(root: Path, env: dict[str, str], log_dir: Path) -> tuple[bool, str, int | None]:
     if relay_health():
         return True, "relay_already_running", None
@@ -279,6 +290,9 @@ def ensure_operator_stack(root_path: str | None = None) -> dict[str, Any]:
     if not relay_ok:
         status["ok"] = False
         status["error"] = relay_msg
+        detail = _relay_err_tail(log_dir)
+        if detail:
+            status["error_detail"] = detail
         return status
 
     if tunnel_msg == "cloudflared_not_found":

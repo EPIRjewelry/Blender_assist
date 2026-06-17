@@ -4,16 +4,24 @@ Repozytorium: **[github.com/EPIRjewelry/Blender_assist](https://github.com/EPIRj
 
 ## Single source of truth (SSOT)
 
-| Składnik | Ścieżka (Windows, przykład po `git clone`) |
+| Składnik | Ścieżka (Windows, operator EPIR) |
+|----------|----------------------------------|
+| **Repo (jedyny klon)** | `D:\Blender Assets\Blender_assist` — nie duplikować na `D:\Blender_Assist` ani root `D:\`. |
+| **Blender add-on (mostek TCP)** | `D:\Blender Assets\Blender_assist\blender_addon\blender_mcp_bridge.py` — instalacja w Blenderze **wyłącznie** z tego pliku. |
+| **Serwer MCP (FastMCP)** | ten sam katalog repo — `pyproject.toml`, `mcp_server/`, `tests/`. |
+
+Przed sesją grafika: `git status` bez `UU` (nierozwiązane konflikty). Smoke mostu: `.\scripts\smoke-bridge-health.ps1`.
+
+| Składnik | Ścieżka (ogólny przykład po `git clone`) |
 |----------|---------------------------------------------|
-| **Blender add-on (mostek TCP)** | `<repo>\blender_addon\blender_mcp_bridge.py` — instalacja w Blenderze **wyłącznie** z tego pliku. |
-| **Serwer MCP (FastMCP)** | `<repo>\` — `pyproject.toml`, pakiet `mcp_server/`, testy `tests/`. Uruchomienie: `python -m mcp_server` lub `python main.py` z katalogu repo (po `pip install -e ".[dev]"`). |
+| **Blender add-on** | `<repo>\blender_addon\blender_mcp_bridge.py` |
+| **Serwer MCP** | `<repo>\` — uruchomienie: `python -m mcp_server` po `pip install -e ".[dev]"`. |
 
 Katalog **`d:\Blender Assets\Krzyż`** nie zawiera już rozwijanego serwera MCP ani addona mostka — zobacz krótki `README.md` w Krzyż po migracji.
 
 ### Gdzie zmienić MCP w Cursorze
 
-- **Globalnie (wszystkie projekty):** plik `C:\Users\user\.cursor\mcp.json` — wpis MCP używa **`command`** = `…\Blender_assist\.venv\Scripts\python.exe` (lub `blender-assist` po `pip install -e .`) oraz **`cwd`** = **katalog sklonowanego** `Blender_assist`. Środowisko `.venv` tworzysz raz: w folderze repo `python -m venv .venv`, potem `.\.venv\Scripts\pip install -e ".[dev]"`.
+- **Globalnie (wszystkie projekty):** plik `C:\Users\user\.cursor\mcp.json` — wpis MCP: **`command`** = `D:\Blender Assets\Blender_assist\.venv\Scripts\python.exe`, **`cwd`** = `D:\Blender Assets\Blender_assist`.
 - **W Cursorze:** *Settings → Cursor Settings → MCP* (lub odpowiednik w Twojej wersji) — te same pola co w JSON.
 - Po zmianie **zrestartuj** serwer MCP / Cursor, żeby wczytał nowy `cwd`.
 
