@@ -1,0 +1,5 @@
+# Desktop agent — local secrets (never commit)
+.local_settings.json
+.openrouter_key
+.openrouter_key.txt
+__pycache__/

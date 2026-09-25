@@ -19,6 +19,7 @@ Repository = "https://github.com/EPIRjewelry/Blender_assist"
 
 [project.scripts]
 blender-assist = "mcp_server.server:main"
+blender-desktop-agent = "desktop_agent.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -27,7 +28,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["mcp_server", "relay"]
+packages = ["mcp_server", "relay", "desktop_agent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -36,7 +37,7 @@ pythonpath = ["."]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["mcp_server", "relay", "tests", "tools"]
+src = ["mcp_server", "relay", "desktop_agent", "tests", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

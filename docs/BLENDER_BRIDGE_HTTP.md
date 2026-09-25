@@ -1,5 +1,7 @@
 # HTTP relay for Operator Studio ↔ Blender (SSOT)
 
+Diagnostyka ścieżek (Cursor vs Blender vs Studio) i znaczenie tekstów UI: [CHARAKTERYSTYKA_MOST.md](./CHARAKTERYSTYKA_MOST.md).
+
 ## Endpoints
 
 | Method | Path | Auth | Description |
